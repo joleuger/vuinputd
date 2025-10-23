@@ -1,0 +1,19 @@
+[package]
+name = "vuinput-examples"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "keyboard-advanced"
+
+[[bin]]
+name = "mouse-advanced"
+
+[dependencies]
+uinput-ioctls = { path = "../uinput-ioctls" }
+#fuse = "0.3"          # FUSE/ CUSE interface
+libfuse-sys = { git = "https://github.com/richard-w/libfuse-sys.git", rev = "a9bc85e3c24d44d8577e79759c4ccf0a18050037", features = ["fuse_35","cuse_lowlevel"] }
+#fuse-backend-rs = "0.13.0"
+nix = { version = "0.30", features = ["ioctl"] } # ioctl & libc bindings
+libc = "0.2"        # raw system calls
+libudev = "0.3" # enumerate-udev

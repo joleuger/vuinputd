@@ -1,0 +1,9 @@
+[workspace]
+members = [
+    "uinput-ioctls",
+    "vuinputd",
+    "vuinput-examples",
+]
+
+# Optional: force same version for all crates
+resolver = "2"

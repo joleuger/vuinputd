@@ -1,0 +1,32 @@
+# ===========================================================
+# Custom HWDB entry for BEEF:DEAD virtual devices
+# -----------------------------------------------------------
+# Purpose:
+#   This entry targets the virtual devices created via uinput
+#   with vendor_id=0xBEEF and product_id=0xDEAD.
+#
+# Why HWDB is used:
+#   - uinput devices are virtual, so ATTRS{idVendor} / ATTRS{idProduct}
+#     may not always be reliable in udev rules due to timing/order.
+#   - HWDB entries are applied after the builtin input_id, ensuring
+#     that the modalias is available and can be matched reliably.
+#   - Using the modalias avoids problems with virtual sysfs attributes.
+#
+# Properties set:
+#   - ID_VUINPUT=1  -> marks the device as our virtual device
+#
+# Notes:
+#   - The first rule adds to the input device, e.g.,
+#     /devices/virtual/input/input92.
+#   - The second rule adds to the event device, e.g.,
+#     /devices/virtual/input/input92/event9
+# 
+# Update procedure after editing:
+#   1. sudo systemd-hwdb update
+# ===========================================================
+
+evdev:input:b0003vBEEFpDEADe0000-*
+ ID_VUINPUT=1
+
+input:b0003vBEEFpDEADe0000-*
+ ID_VUINPUT=1

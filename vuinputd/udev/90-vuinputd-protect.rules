@@ -1,0 +1,47 @@
+# ===========================================================
+# Default permissions for /dev/vuinput
+# -----------------------------------------------------------
+# Rule details:
+#   For now, everyone can use it.
+
+SUBSYSTEM=="cuse", KERNEL=="vuinput", MODE="0666"
+
+# ===========================================================
+# Cleanup rule for our virtual keyboards
+# -----------------------------------------------------------
+# Purpose:
+#   The builtin input_id sets ID_INPUT_KEYBOARD=1 by default.
+#   We want our virtual keyboards to be treated differently,
+#   so we clear the default keyboard flag.
+#
+# Rule details:
+#   - SUBSYSTEM=="input"  -> matches input devices
+#   - KERNEL=="event*"    -> matches event nodes
+#   - ENV{ID_VUINPUT}=="1" -> only affects our virtual keyboards
+#   - ENV{ID_INPUT_KEYBOARD}=""     -> clears the default keyboard flag
+#   - ENV{ID_SEAT}="seat_vuinput"            -> assign to virtual seat for vuinput
+#
+# Rule ordering:
+#   - This runs after the hwdb entry and input_id builtin rules.
+#   - Ensures other keyboards are unaffected.
+#
+# Update procedure after editing:
+#   1. sudo udevadm control --reload
+#   2. sudo udevadm trigger -s input
+# To check seat status:
+#   loginctl seat-status
+#
+# Note:
+#   - Quote from logind: Seats are identified by seat names, which are
+#     strings (<= 255 characters), that start with the four characters "seat"
+#     followed by at least one character from the range [a-zA-Z0-9], "_" and "-".
+#   - Even though the device is listed under the seat, without a graphical device,
+#     or a master-of-seat-tag, the seat won't be created and won't disturb.
+#   - in libinput, ID_INPUT_KEY leads to EVDEV_UDEV_TAG_KEYBOARD, which means
+#     that a device is tagged as keyboard. We don't want that for the host system.
+
+SUBSYSTEMS=="input", ENV{ID_VUINPUT}=="1", ENV{ID_INPUT_KEYBOARD}=="1" \
+ENV{ID_VUINPUT_KEYBOARD}="1", ENV{ID_INPUT_KEYBOARD}="", ENV{ID_SEAT}="seat_vuinput"
+
+SUBSYSTEMS=="input", ENV{ID_VUINPUT}=="1", ENV{ID_INPUT_MOUSE}=="1" \
+ENV{ID_VUINPUT_MOUSE}="1", ENV{ID_INPUT_MOUSE}="", ENV{ID_SEAT}="seat_vuinput"

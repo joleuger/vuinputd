@@ -1,0 +1,20 @@
+[Unit]
+Description=uinput proxy
+After=systemd-udevd.service
+Requires=systemd-udevd.service
+
+[Service]
+ExecStart=/usr/bin/vuinputd
+Restart=on-failure
+
+# Needs CAP_SYS_ADMIN for CUSE + /dev/uinput (I am still missing a capability for the correct working mode)
+#CapabilityBoundingSet=CAP_SYS_ADMIN CAP_MKNOD CAP_DAC_OVERRIDE CAP_FOWNER
+
+# Allow full privileges (dangerous, but okay for debugging)
+CapabilityBoundingSet=~   # remove all limits
+DeviceAllow=/dev/uinput rw
+DeviceAllow=/dev/cuse rw
+
+
+[Install]
+WantedBy=multi-user.target

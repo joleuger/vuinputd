@@ -1,0 +1,28 @@
+[package]
+name = "vuinputd"
+version = "0.1.0"
+edition = "2021"
+authors = ["Johannes Leupolz <dev@leupolz.eu>"]
+license = "MIT"
+description = "Container-safe mediation daemon for /dev/uinput using CUSE."
+repository = "https://github.com/joleuger/vuinputd"
+
+[dependencies]
+uinput-ioctls = { path = "../uinput-ioctls" }
+#fuse = "0.3"          # FUSE/ CUSE interface
+libfuse-sys = { git = "https://github.com/richard-w/libfuse-sys.git", rev = "a9bc85e3c24d44d8577e79759c4ccf0a18050037", features = ["fuse_35","cuse_lowlevel"] }
+#fuse-backend-rs = "0.13.0"
+nix = { version = "0.30", features = ["ioctl","process","sched","fs","event","user","socket","uio"] }
+libc = "0.2"        # raw system calls
+time = "0.3"           # for Timespec in FUSE replies
+#input-linux-sys = "0.9.0"
+#linux-raw-sys = {version="0.11.0", features = ["ioctl"]}
+log = { version = "0.4", features = ["max_level_debug", "release_max_level_warn"] }
+env_logger = "0.11.8"
+libudev = "0.3" # enumerate-udev
+regex = "1.12.2"
+async-channel = "2.5.0"
+futures = "0.3.31"
+async-io = "2.6.0"
+async-pidfd = "0.1.5"
+anyhow = "1.0.100"
