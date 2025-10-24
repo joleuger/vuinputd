@@ -4,7 +4,7 @@ After=systemd-udevd.service
 Requires=systemd-udevd.service
 
 [Service]
-ExecStart=/usr/bin/vuinputd
+ExecStart=/usr/local/bin/vuinputd
 Restart=on-failure
 
 # Needs CAP_SYS_ADMIN for CUSE + /dev/uinput (I am still missing a capability for the correct working mode)

@@ -38,6 +38,7 @@ This project solves that by introducing a **mediated input stack**:
 
 ## Documentation
 
+See [docs/BUILD.md](docs/BUILD.md) for short build and install guide.
 See [docs/DESIGN.md](docs/DESIGN.md) for detailed architecture, design tradeoffs, and security considerations.
 
 ---
