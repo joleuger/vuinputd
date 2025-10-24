@@ -8,6 +8,49 @@ Sunshine requires creating virtual input devices (`/dev/uinput`) for keyboards, 
 Naively exposing `/dev/uinput` from the host into a container breaks isolation: containers could create devices visible to other containers, and the host could even start consuming those devices.
 
 ---
+## 2. Architecture
+
+Usually, uinput apps like sunshine open the /dev/uinput interface of the kernel to create a new artificial event device like /dev/input/event9
+
+```mermaid
+sequenceDiagram
+uinput apps->>uinput (kernel): open /dev/uinput and setup
+create participant eventx
+uinput (kernel)->>eventx: create /dev/input/eventx
+uinput (kernel)->>libinput/game: announce new device via udev
+libinput/game->>eventx: open /dev/input/eventx
+```
+
+vuinputd provides a virtual uinput called /dev/vuinput that can be bind-mounted as /dev/uinput in the container. Thus, uinput devices can also be created inside containers:
+```mermaid
+
+sequenceDiagram
+box transparent Host
+participant uinput (kernel)
+participant vuinputd
+participant vuinput (host)
+end
+
+box transparent Container
+participant uinput (container)
+participant uinput apps
+participant eventx
+participant libinput/game
+end
+
+vuinputd->>vuinput (host): create /dev/vuinput with cuse
+uinput apps->>uinput (container): open /dev/uinput and setup
+uinput (container)-->vuinput (host): is equal (bind mount)
+vuinput (host)->>vuinputd: forward data
+vuinputd->>uinput (kernel): forward data
+uinput (kernel)->>eventx: create /dev/input/eventx
+uinput (kernel)->>vuinputd: announce new device via udev
+vuinputd->>libinput/game: announce new device via udev
+libinput/game->>eventx: open /dev/input/eventx
+
+```
+
+---
 
 ## 2. Design Decisions
 
