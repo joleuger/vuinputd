@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+//
+// Author: Johannes Leupolz <dev@leupolz.eu>
+
 use async_channel::{Receiver, Sender};
 use futures::executor::{LocalPool, LocalSpawner};
 use futures::future::RemoteHandle;

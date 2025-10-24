@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+//
+// Author: Johannes Leupolz <dev@leupolz.eu>
+
 use std::future::Future;
 use std::pin::Pin;
 

@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+//
+// Author: Johannes Leupolz <dev@leupolz.eu>
+
 use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::Path;

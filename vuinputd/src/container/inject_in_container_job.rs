@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+//
+// Author: Johannes Leupolz <dev@leupolz.eu>
+
 use std::{collections::HashMap, future::Future, pin::Pin, time::Duration};
 
 use async_io::Timer;

@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+//
+// Author: Johannes Leupolz <dev@leupolz.eu>
+
 use nix::sys::stat::{makedev, mknod, stat, Mode, SFlag};
 use nix::unistd::{chown, Gid, Uid};
 use std::error::Error;

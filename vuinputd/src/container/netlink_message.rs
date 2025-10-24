@@ -1,3 +1,7 @@
+// SPDX-License-Identifier: MIT
+//
+// Author: Johannes Leupolz <dev@leupolz.eu>
+
 use std::collections::HashMap;
 use std::mem;
 use std::os::fd::{AsRawFd, OwnedFd};
