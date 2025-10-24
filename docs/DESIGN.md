@@ -2,15 +2,18 @@
 
 ## 1. Introduction
 
-This project provides a safe way to run [Sunshine](https://github.com/LizardByte/Sunshine) inside `systemd-nspawn` containers.
-Sunshine requires creating virtual input devices (`/dev/uinput`) for keyboards, mice, and controllers.
+This project provides a safe, general-purpose way to run [Sunshine](https://github.com/LizardByte/Sunshine) and other applications that use `/dev/uinput` **inside containers** — including `systemd-nspawn`, Docker, LXC, Podman, and similar runtimes.
 
-Naively exposing `/dev/uinput` from the host into a container breaks isolation: containers could create devices visible to other containers, and the host could even start consuming those devices.
+Applications like Sunshine require creating virtual input devices (`/dev/uinput`) for keyboards, mice, and controllers.  
+Naively bind-mounting `/dev/uinput` from the host into a container breaks isolation: a container could create devices visible to other containers or even the host, leading to unwanted input injection and security risks.
+
+`vuinputd` introduces a **mediated `/dev/uinput` proxy** that preserves isolation without kernel changes.
 
 ---
+
 ## 2. Architecture
 
-Usually, uinput apps like sunshine open the /dev/uinput interface of the kernel to create a new artificial event device like /dev/input/event9
+Normally, applications open `/dev/uinput` directly to create virtual event devices such as `/dev/input/event9`:
 
 ```mermaid
 sequenceDiagram
@@ -21,7 +24,8 @@ uinput (kernel)->>libinput/game: announce new device via udev
 libinput/game->>eventx: open /dev/input/eventx
 ```
 
-vuinputd provides a virtual uinput called /dev/vuinput that can be bind-mounted as /dev/uinput in the container. Thus, uinput devices can also be created inside containers:
+vuinputd provides a virtual /dev/vuinput implemented via CUSE (Character Device in Userspace).
+This device can be bind-mounted into a container as /dev/uinput, so applications operate normally:
 ```mermaid
 
 sequenceDiagram
@@ -77,3 +81,8 @@ libinput/game->>eventx: open /dev/input/eventx
 
 * **Decision**: Accept that host always sees devices, but enforce rules to stop it consuming them.
 * **Why**: Full input namespaces don’t exist in Linux today; mediation is the practical compromise.
+
+### 3.6 Compatibility
+* **Runtimes supported:** Works with systemd-nspawn, Docker, LXC, Podman, and other container engines.  
+* **Applications supported:** Any program that writes to `/dev/uinput`, including Sunshine, custom input injectors, and game streaming servers.
+
