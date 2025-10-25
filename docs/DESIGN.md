@@ -38,7 +38,7 @@ end
 box transparent Container
 participant uinput (container)
 participant uinput apps
-participant eventx
+participant eventX
 participant libinput/game
 end
 
@@ -47,10 +47,10 @@ uinput apps->>uinput (container): open /dev/uinput and setup
 uinput (container)-->vuinput (host): is equal (bind mount)
 vuinput (host)->>vuinputd: forward data
 vuinputd->>uinput (kernel): forward data
-uinput (kernel)->>eventx: create /dev/input/eventx
+uinput (kernel)->>eventX: create /dev/input/eventX
 uinput (kernel)->>vuinputd: announce new device via udev
 vuinputd->>libinput/game: announce new device via udev
-libinput/game->>eventx: open /dev/input/eventx
+libinput/game->>eventX: open /dev/input/eventX
 ```
 
 ---
