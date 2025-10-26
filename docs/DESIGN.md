@@ -85,4 +85,28 @@ libinput/game->>eventX: open /dev/input/eventX
 ### 3.6 Compatibility
 * **Runtimes supported:** Works with systemd-nspawn, Docker, LXC, Podman, and other container engines.  
 * **Applications supported:** Any program that writes to `/dev/uinput`, including Sunshine, custom input injectors, and game streaming servers.
+---
 
+## 4. Security Considerations
+
+`vuinputd` must currently run with **root privileges** to:
+
+* Access `/dev/uinput` and create CUSE devices.
+* Send and receive **udev/netlink** messages.
+* Manage per-container device nodes under `/dev/input`.
+
+While this design is necessary for mediation, it introduces potential attack surfaces:
+
+### ⚠️ Risks
+
+* **Privilege escalation:** a compromised container could exploit bugs in the proxy.
+* **Input injection:** if isolation fails, input devices may leak between containers.
+* **Unsafe FUSE/`unsafe` code:** any memory or pointer error could lead to denial-of-service or privilege abuse.
+
+### 🛡️ Mitigations (planned / recommended)
+
+* [ ] Drop capabilities after startup (e.g. keep only `CAP_SYS_ADMIN` where needed).
+* [ ] Run under a dedicated **system user** (`vuinputd`) with limited filesystem access.
+* [ ] Enforce **container identity** using cgroup, namespace, or pidfd checks.
+* [ ] Use **seccomp** or `systemd` sandboxing (`ProtectSystem`, `ProtectKernelTunables`, `RestrictNamespaces`, etc.).
+* [ ] Eventually migrate to **Rust-native FUSE/Netlink** bindings to remove unsafe dependencies.

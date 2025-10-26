@@ -72,6 +72,42 @@ See [docs/DESIGN.md](docs/DESIGN.md) for a detailed overview of the architecture
 
 ---
 
+## 🧩 Production Readiness
+
+**Current Status:** 🚧 *Prototype / Alpha — functional, not yet production-grade.*
+
+`vuinputd` is currently in a functional prototype stage.
+It reliably demonstrates the core concept — exposing `/dev/uinput` devices inside containers via CUSE — but several aspects require hardening before production use. 
+
+### ✅ Goals for Production Readiness
+
+* [ ] **Error handling and recovery:**
+  Ensure the daemon gracefully handles container shutdowns, device races, and failed mounts without leaks or undefined states.
+
+* [ ] **Security model:**
+  Review privilege requirements (root access, netlink permissions, CUSE capabilities) and ideally reduce the attack surface via namespace isolation, seccomp, or capability dropping.
+
+* [ ] **Robust startup and shutdown:**
+  Add reliable cleanup of virtual devices and clear error feedback when reloading or restarting.
+
+* [ ] **Container runtime integration:**
+  Validate compatibility with major runtimes (`systemd-nspawn`, `Docker`, `LXC`, `Podman`, etc.) and document integration steps.
+
+* [ ] **Comprehensive testing:**
+
+  * Unit tests for the Rust core logic
+  * Integration tests with multiple containers
+  * Fuzz or stress testing of the CUSE layer
+
+* [ ] **Code audit:**
+  Review `unsafe` sections (from FUSE bindings) and ensure memory safety and proper lifetime handling.
+
+* [ ] **Distribution and packaging:**
+  Provide a deb/rpm package for simple deployment.
+
+---
+
+
 ## License
 
 MIT
