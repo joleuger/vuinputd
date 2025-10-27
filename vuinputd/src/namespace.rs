@@ -2,13 +2,14 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
+use log::debug;
 use nix::{
     sched::{setns, CloneFlags},
     unistd::{fork, ForkResult, Pid},
 };
 use std::{
     fs::{self, File},
-    os::fd::AsFd,
+    os::fd::AsFd, path::{self, Path},
 };
 
 #[derive(Debug, Default, Clone, Eq, PartialEq, Hash)]
@@ -106,6 +107,11 @@ pub fn run_in_net_and_mnt_namespace(ns: Namespaces, func: Box<dyn Fn()>) -> nix:
         }
         ForkResult::Child => {
             // enter namespace
+            let path: &Path = Path::new(ns.nspath.as_str());
+            if !fs::exists(path).unwrap() {
+                debug!("the process whose namespaces we want to enter does not exist anymore!");
+                std::process::exit(0);
+            }
             let net = File::open(ns.nspath.clone() + "/net").expect("net not found");
             let mnt = File::open(ns.nspath.clone() + "/mnt").expect("mnt not found");
             setns(net.as_fd(), CloneFlags::CLONE_NEWNET).expect("couldn't enter net");

@@ -13,35 +13,10 @@
 // renaming
 // use in container
 // cancellation token
-// device removal (udev netlink message)
 // distinguish between cleanup jobs that must not be cancelled and other jobs (especially background jobs)
 // naming: dev_path vs dev_node. I guess I mean the same.
 // Send warning, if udev monitor does not exist
 
-
-// test scenario:
-// vuinputd
-// mouse-advanced
-// ls -lh /dev/input/event9
-// cat /run/udev/data/c13:73
-// machinectl shell johannes@gamestreamingserver
-// systemctl --user stop headless-labwc.service
-// machinectl shell gamestreamingserver
-// mkdir -p /run/udev/data/
-// touch /run/udev/control
-// mknod /dev/input/event9 c 13 73
-// vim /run/udev/data/c13:73
-// machinectl shell johannes@gamestreamingserver
-// systemctl --user start headless-labwc.service
-// systemctl --user start wayvnc.service
-
-
-//libinput backend
-// seatd
-//libinput-tools
-// groups
-// 777 for input9
-// char-input to systemd
 
 use libc::O_CLOEXEC;
 use libc::{iovec, off_t, size_t, EBADRQC, EIO, ENOENT};
@@ -287,7 +262,8 @@ unsafe extern "C" fn vuinput_release(
 
     // remove device in container, if the request was really from another namespace
     if ! SELF_NAMESPACES.get().unwrap().equal_mnt_and_net(&vuinput_state.ns_of_requestor) {
-        let remove_job=RemoveFromContainerJob::new(vuinput_state.ns_of_requestor.clone(),vuinput_state.input_device.as_ref().unwrap().syspath.clone());
+        let input_device = vuinput_state.input_device.as_ref().unwrap();
+        let remove_job=RemoveFromContainerJob::new(vuinput_state.ns_of_requestor.clone(),input_device.devnode.clone(),input_device.syspath.clone(),input_device.major,input_device.minor);
         JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(remove_job));
     }
 
@@ -468,7 +444,8 @@ unsafe extern "C" fn vuinput_ioctl(
 
             // Remove device in container, if the request was really from another namespace
             if ! SELF_NAMESPACES.get().unwrap().equal_mnt_and_net(&vuinput_state.ns_of_requestor) {
-                let remove_job=RemoveFromContainerJob::new(vuinput_state.ns_of_requestor.clone(),vuinput_state.input_device.as_ref().unwrap().syspath.clone());
+                let input_device = vuinput_state.input_device.as_ref().unwrap();
+                let remove_job=RemoveFromContainerJob::new(vuinput_state.ns_of_requestor.clone(),input_device.devnode.clone(),input_device.syspath.clone(),input_device.major,input_device.minor);
                 JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(remove_job));
             }
 

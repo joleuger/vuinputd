@@ -6,6 +6,7 @@ use async_channel::{Receiver, Sender};
 use futures::executor::{LocalPool, LocalSpawner};
 use futures::future::RemoteHandle;
 use futures::task::LocalSpawnExt;
+use log::debug;
 use std::sync::Mutex;
 use std::thread::{self, JoinHandle};
 use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
@@ -109,7 +110,9 @@ impl Dispatcher {
 
     pub fn close(&mut self) {
         self.tx = None;
+        debug!("Checking for running jobs before shutdown");
         self.future_handles.lock().unwrap().clear();
+        debug!("Pending jobs canceled");
     }
 
     pub fn wait_until_finished(&mut self) {

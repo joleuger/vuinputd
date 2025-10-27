@@ -81,7 +81,7 @@ impl InjectInContainerJob {
             number_of_attempt+=1;
             // wait a maximum of 5 seconds == 50 attempts
             Timer::after(Duration::from_millis(100)).await;
-        }
+        } 
         if (netlink_data.is_none() || runtime_data.is_none()) {
             if netlink_data.is_none() {
                 debug!("Give up reading netlink data");
@@ -98,11 +98,16 @@ impl InjectInContainerJob {
         let runtime_data = runtime_data.unwrap();
         let netlink_data = netlink_data.unwrap();
 
+
         let child_pid = run_in_net_and_mnt_namespace(self.namespaces, Box::new(move || {
-            
-            ensure_input_device(self.dev_path.clone(), self.major, self.minor).unwrap();
+
+            if let Err(e) = ensure_input_device(self.dev_path.clone(), self.major, self.minor) {
+                debug!("Error creating input device {}: {e}",self.dev_path.clone());
+            };
             ensure_udev_structure().unwrap();
-            write_udev_data(runtime_data.as_str(), major, minor).unwrap();
+            if let Err(e) = write_udev_data(runtime_data.as_str(), major, minor) {
+                debug!("Error writing udev data for device {}: {e}",self.dev_path.clone());
+            };
             send_udev_monitor_message_with_properties(netlink_data.clone());
 
         }))

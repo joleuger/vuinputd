@@ -62,6 +62,14 @@ pub fn write_udev_data(content: &str, major: u64, minor: u64) -> io::Result<()> 
     Ok(())
 }
 
+/// Delete udev data for a given major/minor number
+/// - `major`, `minor` = device numbers
+pub fn delete_udev_data(major: u64, minor: u64) -> io::Result<()> {
+
+    let path = format!("/run/udev/data/c{}:{}", major, minor);
+    fs::remove_file(&path)?;
+    Ok(())
+}
 
 pub fn read_udev_data(major: u64, minor: u64) -> io::Result<String> {
     let path = format!("/run/udev/data/c{}:{}", major, minor);
