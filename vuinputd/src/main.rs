@@ -187,7 +187,7 @@ unsafe extern "C" fn vuinput_open(
     let fh = get_fresh_filehandle();
     let ctx = fuse_lowlevel::fuse_req_ctx(_req);
     debug!("fh {}: opened by process id {} (host view)", fh, (*ctx).pid);
-    let namespaces = get_namespaces(Some((*ctx).pid));
+    let namespaces = get_namespaces(Pid::Pid((*ctx).pid));
     debug!("fh {}: namespaces {}", fh, namespaces);
     // namespaces net:4026531840, uts:4026531838, ipc:4026531839, pid:4026531836, pid_for_children:4026531836, user:4026531837, mnt:4026531841, cgroup:4026531835, time:4026531834, time_for_children:4026531834
     (*_fi).fh = fh;
@@ -645,7 +645,7 @@ fn main() -> std::io::Result<()> {
     VUINPUT_STATE.set(RwLock::new(HashMap::new())).unwrap();
     VUINPUT_COUNTER.set(AtomicU64::new(3)).unwrap();
     JOB_DISPATCHER.set(Mutex::new(Dispatcher::new())).unwrap();
-    SELF_NAMESPACES.set(get_namespaces(None)).unwrap();
+    SELF_NAMESPACES.set(get_namespaces(Pid::SelfPid)).unwrap();
     JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(MonitorBackgroundLoop::new()));
 
     info!("Starting vuinputd");
