@@ -9,11 +9,9 @@ Restart=on-failure
 
 # Needs CAP_SYS_ADMIN for CUSE + /dev/uinput (I am still missing a capability for the correct working mode)
 #CapabilityBoundingSet=CAP_SYS_ADMIN CAP_MKNOD CAP_DAC_OVERRIDE CAP_FOWNER
-
-# Allow full privileges (dangerous, but okay for debugging)
-CapabilityBoundingSet=~   # remove all limits
-DeviceAllow=/dev/uinput rw
-DeviceAllow=/dev/cuse rw
+#DeviceAllow=/dev/uinput rw
+#DeviceAllow=/dev/cuse rw
+DeviceAllow=char-* rwm # we need the permission to create all sorts of devices
 
 
 [Install]

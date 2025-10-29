@@ -9,7 +9,7 @@ use nix::{
 };
 use std::{
     fs::{self, File},
-    os::fd::AsFd, path::{self, Path},
+    os::fd::AsFd, path::{self, Path}, process, thread, time::Duration,
 };
 
 use std::io::{self, BufRead};
@@ -170,6 +170,7 @@ pub fn get_namespaces(pid: Pid) -> Namespaces {
 
                 }
             }
+            debug!("identified process {} as root of process id {}",ppid.path(),pid.path());
 
             let nspath = format!("{}/ns", pid.path());
             let nsroot = format!("{}/ns", ppid.path());
@@ -196,14 +197,17 @@ pub fn get_namespaces(pid: Pid) -> Namespaces {
 /// Returns the child PID so the caller can `waitpid` on it.
 pub fn run_in_net_and_mnt_namespace(ns: Namespaces, func: Box<dyn Fn()>) -> nix::Result<nix::unistd::Pid> {
     //Note: The child process is created with a single thread—the one that called fork().
+
     match unsafe { fork()? } {
         ForkResult::Parent { child } => {
             // Parent: return the PID of the child
             Ok(child)
         }
         ForkResult::Child => {
+            debug!("Start new process {}",process::id());
             // enter namespace
             let path: &Path = Path::new(ns.nsroot.as_str());
+            debug!("Entering namespaces of process {}. We assume this is the root process of the container.",ns.nsroot.clone());
             if !fs::exists(path).unwrap() {
                 debug!("the root process of the container whose namespaces we want to enter does not exist anymore!");
                 std::process::exit(0);
@@ -212,6 +216,7 @@ pub fn run_in_net_and_mnt_namespace(ns: Namespaces, func: Box<dyn Fn()>) -> nix:
             let mnt = File::open(ns.nsroot.clone() + "/mnt").expect("mnt not found");
             setns(net.as_fd(), CloneFlags::CLONE_NEWNET).expect("couldn't enter net");
             setns(mnt.as_fd(), CloneFlags::CLONE_NEWNS).expect("couldn't enter mnt");
+            
             // execute your function
             func();
             std::process::exit(0);

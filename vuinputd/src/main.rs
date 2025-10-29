@@ -634,11 +634,22 @@ pub fn vuinput_make_cuse_ops() -> cuse_lowlevel::cuse_lowlevel_ops {
     }
 }
 
-
+fn check_permissions() -> Result<(), std::io::Error> {
+    let path = Path::new("/proc/self/status");
+    debug!("Capabilities of vuinputd process:");
+    fs::read_to_string(path).
+        and_then(|status_file| {
+            status_file.lines()
+                        .filter(|line| line.starts_with("Cap"))
+                        .for_each(move |x| debug!("{}",x));
+            Ok(())
+        })
+}
 
 fn main() -> std::io::Result<()> {
-
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug")).init();
+
+    check_permissions().unwrap();
 
     let args: Vec<String> = std::env::args().collect();
 
