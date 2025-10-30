@@ -3,7 +3,7 @@
 ## 🔹 Prerequisites
 
 * Rust toolchain (recommended: install via [rustup](https://rustup.rs))
-* Linux with `libfuse3-dev`, `libudev-dev` and `pkg-config` installed (for cuse/udev access)
+* Linux with `build-essential`, `libc6-dev`, `libfuse3-dev`, `libudev-dev` and `pkg-config` installed (for cuse/udev access)
 
 ---
 
@@ -19,7 +19,7 @@ cd vuinputd
 Build all crates (daemon, forwarder, announce, common):
 
 ```bash
-apt-get install libfuse3-dev pkg-config fuse3 libudev-dev
+apt-get install build-essential libc6-dev libfuse3-dev pkg-config fuse3 libudev-dev
 
 cargo build --release
 ```

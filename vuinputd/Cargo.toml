@@ -8,9 +8,9 @@ description = "Container-safe mediation daemon for /dev/uinput using CUSE."
 repository = "https://github.com/joleuger/vuinputd"
 
 [dependencies]
-uinput-ioctls = { path = "../uinput-ioctls" }
+uinput-ioctls = { path = "../uinput-ioctls", version = "0.1" }
 #fuse = "0.3"          # FUSE/ CUSE interface
-libfuse-sys = { git = "https://github.com/richard-w/libfuse-sys.git", rev = "a9bc85e3c24d44d8577e79759c4ccf0a18050037", features = ["fuse_35","cuse_lowlevel"] }
+cuse-lowlevel = { path = "../cuse-lowlevel", version = "0.1" }
 #fuse-backend-rs = "0.13.0"
 nix = { version = "0.30", features = ["ioctl","process","sched","fs","event","user","socket","uio"] }
 libc = "0.2"        # raw system calls

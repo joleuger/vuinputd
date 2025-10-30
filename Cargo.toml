@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "uinput-ioctls",
+    "cuse-lowlevel",
     "vuinputd",
     "vuinput-examples",
 ]

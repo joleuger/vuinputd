@@ -21,8 +21,7 @@
 use libc::O_CLOEXEC;
 use libc::{iovec, off_t, size_t, EBADRQC, EIO, ENOENT};
 use libc::{uinput_abs_setup, uinput_ff_erase, uinput_ff_upload, uinput_setup};
-use libfuse_sys::cuse_lowlevel;
-use libfuse_sys::fuse_lowlevel;
+use ::cuse_lowlevel::*;
 use log::{debug, error, info, trace};
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};

@@ -1,0 +1,19 @@
+[package]
+name = "cuse-lowlevel"
+version = "0.1.0"
+edition = "2021"
+license = "MIT AND LGPL-2.0-or-later"
+description = "Raw bindings to the low level api of cuse and fuse in libfuse3"
+repository = "https://github.com/joleuger/vuinputd"
+authors = ["Richard Wiedenhöft <richard@wiedenhoeft.xyz>", "Johannes Leupolz <dev@leupolz.eu>"]
+categories = ["external-ffi-bindings"]
+keywords = ["cuse", "fuse", "bindings", "filesystem", "fs"]
+readme = "README.md"
+build = "build.rs"
+
+[dependencies]
+libc = "0.2"
+
+[build-dependencies]
+bindgen = "0.60"
+pkg-config = "0.3"
