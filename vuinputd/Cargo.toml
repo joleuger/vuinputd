@@ -6,6 +6,7 @@ authors = ["Johannes Leupolz <dev@leupolz.eu>"]
 license = "MIT"
 description = "Container-safe mediation daemon for /dev/uinput using CUSE."
 repository = "https://github.com/joleuger/vuinputd"
+readme = "../README.md"
 
 [dependencies]
 uinput-ioctls = { path = "../uinput-ioctls", version = "0.1" }
