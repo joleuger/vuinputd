@@ -12,6 +12,8 @@ This crate is heavily based on libfuse-sys by Richard Wiedenhöft. See the [orig
 
 This fork here contains only the relevant subset of code of libfuse-sys to access the low-level api of cuse.
 
+This crate does not attempt to abstract or validate cuse usage; it only provides wrappers. Higher-level logic (such as event management or device configuration) should be built on top.
+
 ## Using cuse-lowlevel
 
 Add the dependencies to your Cargo.toml

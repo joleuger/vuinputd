@@ -110,3 +110,28 @@ While this design is necessary for mediation, it introduces potential attack sur
 * [ ] Enforce **container identity** using cgroup, namespace, or pidfd checks.
 * [ ] Use **seccomp** or `systemd` sandboxing (`ProtectSystem`, `ProtectKernelTunables`, `RestrictNamespaces`, etc.).
 * [ ] Eventually migrate to **Rust-native FUSE/Netlink** bindings to remove unsafe dependencies.
+
+## 5. Alternative Approaches
+
+### 5.1 trace accesses of /dev/uinput with eBPF
+
+**Idea (short):** attach an eBPF program to the syscall tracepoint for `ioctl` (`tracepoint/syscalls/sys_enter_ioctl`), filter by container cgroup, and send small events (pid, tgid, fd, cmd, timestamp, short payload sample) to userspace using the BPF ring buffer. A privileged host agent consumes the ringbuf events, duplicates the target FD via `pidfd_getfd()` and proceeds with UI_GET_SYSNAME / sysfs resolution to retrieve the sys-path and the dev-path. Having the dev-path and the pid of the container, the solution could proceed as in the current solution.
+
+#### 1) Trace hook: `tracepoint/syscalls/sys_enter_ioctl`
+
+Use the *syscall tracepoint* `syscalls:sys_enter_ioctl`. Tracepoints are stable, exported kernel probe points and the syscall tracepoint provides the syscall arguments (fd, cmd, arg) in a stable layout. This avoids fragile kprobe offsets on architecture-specific syscall wrappers. See the kernel tracepoint docs.
+
+#### 2) BPF map: ring buffer (kernel → userspace)
+
+Use the BPF ring buffer (`BPF_MAP_TYPE_RINGBUF`) to cheaply publish fixed-size events to userspace. The ring buffer provides `bpf_ringbuf_reserve()` / `bpf_ringbuf_submit()` semantics from the kernel side and is the recommended modern replacement for perf-buf for high-rate kernel→user events. See the kernel documentation for the ring buffer API.
+
+#### 3) Useful eBPF helpers
+
+Inside the trace program you will typically use:
+
+* `bpf_get_current_pid_tgid()` to record tgid/pid,
+* `bpf_get_current_cgroup_id()` to filter to the container cgroup you care about,
+* `bpf_copy_from_user()` to safely copy up to `N` bytes from the user pointer (`arg`) into the event buffer.
+
+#### 4) Use of `pidfd_getfd`
+The **`pidfd_getfd()`** syscall (introduced in Linux 5.6, see `man pidfd_getfd(2)`) allows one process to **duplicate a file descriptor from another process** into its own FD table. It takes a *pidfd* (obtained via `pidfd_open()` or from `CLONE_PIDFD`), the target FD number in the remote process, and optional flags. The resulting descriptor refers to the **same open file description**—sharing offset, status flags, and driver state—exactly as if the target process had called `dup()`. Permission checks apply: the caller must either share credentials (same UID) or hold `CAP_SYS_PTRACE` or an equivalent capability over the target. This makes `pidfd_getfd()` the canonical and race-free way to inspect or reuse another process’s device handles (for example, to run `UI_GET_SYSNAME` on a client apps' fd on `/dev/uinput` ) without invasive ptrace tricks.

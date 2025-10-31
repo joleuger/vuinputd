@@ -2,6 +2,13 @@
 name = "uinput-ioctls"
 version = "0.1.0"
 edition = "2021"
+license = "MIT"
+description = "Rust bindings for Linux uinput ioctl constants and helper macros."
+repository = "https://github.com/joleuger/vuinputd"
+authors = ["Johannes Leupolz <dev@leupolz.eu>"]
+categories = ["external-ffi-bindings"]
+keywords = ["uinput", "ioctl"]
+readme = "README.md"
 
 
 [dependencies]
