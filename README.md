@@ -45,12 +45,16 @@ sequenceDiagram
         participant VirtUinput as /dev/uinput (virt)
     end
 
-    Daemon->>VirtUinput: provides virtual /dev/uinput via CUSE
-    App->>VirtUinput: creates virtual input device
-    VirtUinput->>Daemon: forwards input events
-    Daemon->>Kernel: injects events into host uinput
-    Kernel->>App: exposes resulting /dev/input/eventX via udev
-
+    Daemon->>VirtUinput: 1. provides virtual /dev/uinput via CUSE
+    App->>VirtUinput: 2. create virtual input device
+    VirtUinput-->Daemon: 3. data from virtual /dev/uinput via CUSE
+    Daemon->>Kernel: 4. create virtual input device
+    Kernel->>Daemon: 5. notify applications on host about new eventX device
+    Daemon->>App: 6. notify application in container about new eventX device
+    App->>VirtUinput: 7. send input data
+    VirtUinput-->Daemon: 8. data from virtual /dev/uinput via CUSE
+    Daemon->>Kernel: 9. send input data
+    Kernel->>Game: 10. send input data
 ```
 
 
