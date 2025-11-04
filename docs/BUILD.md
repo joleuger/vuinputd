@@ -19,10 +19,11 @@ cd vuinputd
 Build all crates (daemon, forwarder, announce, common):
 
 ```bash
-apt-get install build-essential libc6-dev libfuse3-dev pkg-config fuse3 libudev-dev
+apt-get install build-essential libc6-dev libfuse3-dev pkg-config fuse3 libudev-dev 
 
 cargo build --release
 ```
+Note: If the system default compiler for C is clang, then `apt-get install libclang-dev` might be necessary as well.
 
 Binaries will be located under:
 
