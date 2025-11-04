@@ -153,7 +153,7 @@ fn main() -> io::Result<()> {
             std::process::exit(1);
         });
 
-        let mut resultbuf: [i8; 64] = [0i8; 64];
+        let mut resultbuf: [c_char; 64] = [0; 64];
         ui_get_sysname(fd, &mut resultbuf).unwrap();
         let sysname = CStr::from_ptr(resultbuf.as_ptr()).to_string_lossy();
         eprintln!("sysname: {}", sysname);

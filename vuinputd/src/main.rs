@@ -413,7 +413,7 @@ unsafe extern "C" fn vuinput_ioctl(
             debug!("fh {}: ioctl UI_DEV_CREATE", fh);
             ui_dev_create(fd).unwrap();
 
-            let mut resultbuf: [i8; 64] = [0i8; 64];
+            let mut resultbuf: [c_char; 64] = [0; 64];
             ui_get_sysname(fd, resultbuf.as_mut_slice()).unwrap();
             let sysname = format!(
                 "{}{}",
@@ -479,7 +479,7 @@ unsafe extern "C" fn vuinput_ioctl(
                 _out_bufsz == 64,
                 "should have _out_bufsz of length 64 (currently hardcoded)"
             );
-            let mut resultbuf: [i8; 64] = [0i8; 64];
+            let mut resultbuf: [c_char; 64] = [0; 64];
             ui_get_sysname(fd, resultbuf.as_mut_slice()).unwrap();
             let sysname = CStr::from_ptr(resultbuf.as_ptr()).to_string_lossy();
             debug!("fh {}: sysname: {}", fh, sysname);
