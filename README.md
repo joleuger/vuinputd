@@ -43,6 +43,7 @@ sequenceDiagram
     box transparent Container
         participant App as Container App
         participant VirtUinput as /dev/uinput (virt)
+        Participant Game as Game
     end
 
     Daemon->>VirtUinput: 1. provides virtual /dev/uinput via CUSE
@@ -54,7 +55,7 @@ sequenceDiagram
     App->>VirtUinput: 7. send input data
     VirtUinput-->Daemon: 8. data from virtual /dev/uinput via CUSE
     Daemon->>Kernel: 9. send input data
-    Kernel->>Game: 10. send input data
+    Kernel->>Game: 10. send input data via eventX device
 ```
 
 
