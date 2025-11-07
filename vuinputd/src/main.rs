@@ -18,14 +18,14 @@
 // Send warning, if udev monitor does not exist
 
 
-use libc::O_CLOEXEC;
+use libc::{O_CLOEXEC, input_id};
 use libc::{iovec, off_t, size_t, EBADRQC, EIO, ENOENT};
 use libc::{uinput_abs_setup, uinput_ff_erase, uinput_ff_upload, uinput_setup};
 use ::cuse_lowlevel::*;
 use log::{debug, error, info, trace};
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};
-use std::fs;
+use std::{fs, ptr};
 use std::fs::{File, OpenOptions};
 use std::io::Write;
 use std::io::{self, ErrorKind};
@@ -33,16 +33,14 @@ use std::os::fd::AsRawFd;
 use std::os::raw::{c_char, c_int, c_uint, c_void};
 use std::os::unix::fs::{FileTypeExt, MetadataExt, OpenOptionsExt};
 use std::path::Path;
-use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use uinput_ioctls::*;
 
 pub mod namespace;
 pub mod monitor_udev;
 use crate::container::inject_in_container_job::InjectInContainerJob;
-use crate::container::netlink_message;
 use crate::container::remove_from_container_job::RemoveFromContainerJob;
-use crate::jobs::closure_job::ClosureJob;
 use crate::monitor_udev::MonitorBackgroundLoop;
 use crate::namespace::*;
 
@@ -97,6 +95,7 @@ static SELF_NAMESPACES: OnceLock<Namespaces>= OnceLock::new();
 
 
 const SYS_INPUT_DIR: &str = "/sys/devices/virtual/input/";
+const BUS_USB: u16 = 0x03;
 
 fn get_vuinput_state(
     fh:&VuFileHandle,
@@ -228,14 +227,49 @@ unsafe extern "C" fn vuinput_write(
         "vuinput_write: offset needs to be 0 but is {}",
         _off
     );
+    let fh = &(*_fi).fh;
     let slice = std::slice::from_raw_parts(_buf as *const u8, _size);
     let vuinput_state_mutex = get_vuinput_state(&VuFileHandle::from_fuse_file_info(_fi.as_ref().unwrap())).unwrap();
     let mut vuinput_state = vuinput_state_mutex.lock().unwrap();
     
-    assert!(
-        vuinput_state.input_device.is_some(),
-        "legacy device setup not supported, yet!"
-    );
+    if vuinput_state.input_device.is_none() {
+        debug!("{}: legacy device setup recognized! Ignore the data and use hardcoded values",fh);
+
+        assert!(_size == std::mem::size_of::<libc::uinput_user_dev>());
+        let legacy_uinput_user_dev = _buf as *const libc::uinput_user_dev;
+
+        let mut usetup: uinput_setup = unsafe { std::mem::zeroed() };
+        usetup.id.bustype = BUS_USB;
+        usetup.id.vendor = 0xbeef;
+        usetup.id.product = 0xdead;
+        usetup.id.version = (*legacy_uinput_user_dev).id.version;
+        usetup.ff_effects_max=(*legacy_uinput_user_dev).ff_effects_max;
+        usetup.name=(*legacy_uinput_user_dev).name;
+
+        // Call IOCTLs to setup and create the device
+        // Assuming your wrappers accept (fd, ptr_to_usetup) etc.
+        // We'll pass pointer to usetup
+        let usetup_ptr = &mut usetup as *mut uinput_setup;
+        let fd = vuinput_state.file.as_raw_fd();
+        ui_dev_setup(fd, usetup_ptr).unwrap();
+
+        // setup abs
+        for code in  0..libc::ABS_CNT{
+            let mut abs_setup: uinput_abs_setup = unsafe { std::mem::zeroed() };
+            abs_setup.code=code.try_into().unwrap();
+            abs_setup.absinfo.maximum = (*legacy_uinput_user_dev).absmax[code];
+            abs_setup.absinfo.minimum = (*legacy_uinput_user_dev).absmin[code];
+            abs_setup.absinfo.fuzz = (*legacy_uinput_user_dev).absfuzz[code];
+            abs_setup.absinfo.flat = (*legacy_uinput_user_dev).absflat[code];
+
+            let abs_setup_ptr = &mut abs_setup as *mut uinput_abs_setup;
+            ui_abs_setup(fd, abs_setup_ptr).unwrap();
+        }
+
+        fuse_lowlevel::fuse_reply_write(_req, _size);
+        return;
+    }
+
     let result = vuinput_state.file.write_all(slice);
 
     match result {
