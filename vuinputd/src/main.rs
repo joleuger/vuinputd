@@ -88,10 +88,16 @@ impl std::fmt::Display for VuFileHandle {
     }
 }
 
+#[derive(Debug)]
+enum VuError {
+    WriteError
+}
+
 static VUINPUT_COUNTER: OnceLock<AtomicU64> = OnceLock::new();
 static VUINPUT_STATE: OnceLock<RwLock<HashMap<VuFileHandle, Arc<Mutex<VuInputState>>>>> = OnceLock::new();
 static JOB_DISPATCHER: OnceLock<Mutex<Dispatcher>>= OnceLock::new();
 static SELF_NAMESPACES: OnceLock<Namespaces>= OnceLock::new();
+static DEDUP_LAST_ERROR: OnceLock<Mutex<Option<(u64,VuError)>>> = OnceLock::new();
 
 
 const SYS_INPUT_DIR: &str = "/sys/devices/virtual/input/";
@@ -278,7 +284,15 @@ unsafe extern "C" fn vuinput_write(
             fuse_lowlevel::fuse_reply_write(_req, _size);
         }
         Err(e) => {
-            debug!("fh {}: error writing to uinput: {e:?}",fh);
+            let mut last_error = DEDUP_LAST_ERROR.get().unwrap().lock().unwrap();
+            
+            match *last_error {
+                Some((last_fh,VuError::WriteError)) if *fh == last_fh => {},
+                _ => {debug!("fh {}: error writing to uinput: {e:?}",fh);}
+            }
+            
+            *last_error = Some((*fh,VuError::WriteError));
+            
             fuse_lowlevel::fuse_reply_err(_req, EIO);
         }
     }
@@ -292,7 +306,7 @@ unsafe extern "C" fn vuinput_release(
     let vuinput_state_mutex = remove_vuinput_state(&VuFileHandle::from_fuse_file_info(_fi.as_ref().unwrap())).unwrap();
 
     let mut vuinput_state = vuinput_state_mutex.lock().unwrap();
-    let input_device = vuinput_state.input_device.take();;
+    let input_device = vuinput_state.input_device.take();
 
     // Remove device in container, if the request was really from another namespace
     // Only do this in case it has not already been done by the ioctl UI_DEV_DESTROY
@@ -694,6 +708,7 @@ fn main() -> std::io::Result<()> {
     VUINPUT_COUNTER.set(AtomicU64::new(3)).unwrap();
     JOB_DISPATCHER.set(Mutex::new(Dispatcher::new())).unwrap();
     SELF_NAMESPACES.set(get_namespaces(Pid::SelfPid)).unwrap();
+    DEDUP_LAST_ERROR.set(Mutex::new(None)).unwrap();
     JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(MonitorBackgroundLoop::new()));
 
     info!("Starting vuinputd");
