@@ -278,7 +278,7 @@ unsafe extern "C" fn vuinput_write(
             fuse_lowlevel::fuse_reply_write(_req, _size);
         }
         Err(e) => {
-            debug!("error writing to uinput: {e:?}");
+            debug!("fh {}: error writing to uinput: {e:?}",fh);
             fuse_lowlevel::fuse_reply_err(_req, EIO);
         }
     }
@@ -290,12 +290,16 @@ unsafe extern "C" fn vuinput_release(
 ) {
     let fh = &(*_fi).fh;
     let vuinput_state_mutex = remove_vuinput_state(&VuFileHandle::from_fuse_file_info(_fi.as_ref().unwrap())).unwrap();
-    
-    let mut vuinput_state = vuinput_state_mutex.lock().unwrap();
 
-    // remove device in container, if the request was really from another namespace
-    if ! SELF_NAMESPACES.get().unwrap().equal_mnt_and_net(&vuinput_state.ns_of_requestor) {
-        let input_device = vuinput_state.input_device.as_ref().unwrap();
+    let mut vuinput_state = vuinput_state_mutex.lock().unwrap();
+    let input_device = vuinput_state.input_device.take();;
+
+    // Remove device in container, if the request was really from another namespace
+    // Only do this in case it has not already been done by the ioctl UI_DEV_DESTROY
+    // this here is relevant if the process was killed and didn't have the chance to send the
+    // ioctl UI_DEV_DESTROY.
+    if input_device.is_some() && ! SELF_NAMESPACES.get().unwrap().equal_mnt_and_net(&vuinput_state.ns_of_requestor) {
+        let input_device = input_device.unwrap();
         let remove_job=RemoveFromContainerJob::new(vuinput_state.ns_of_requestor.clone(),input_device.devnode.clone(),input_device.syspath.clone(),input_device.major,input_device.minor);
         JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(remove_job));
     }
@@ -303,7 +307,7 @@ unsafe extern "C" fn vuinput_release(
     drop(vuinput_state);
 
     debug!(
-        "{}: references left before releasing device {} (expected is 1)",
+        "fh {}: references left before releasing device {} (expected is 1)",
         fh,
         Arc::strong_count(&vuinput_state_mutex)
     );
@@ -474,14 +478,14 @@ unsafe extern "C" fn vuinput_ioctl(
         }
         UI_DEV_DESTROY => {
             debug!("fh {}: ioctl UI_DEV_DESTROY", fh);
+            let input_device = vuinput_state.input_device.take();
 
             // Remove device in container, if the request was really from another namespace
-            if ! SELF_NAMESPACES.get().unwrap().equal_mnt_and_net(&vuinput_state.ns_of_requestor) {
-                let input_device = vuinput_state.input_device.as_ref().unwrap();
+            if input_device.is_some() && ! SELF_NAMESPACES.get().unwrap().equal_mnt_and_net(&vuinput_state.ns_of_requestor) {
+                let input_device = input_device.unwrap();
                 let remove_job=RemoveFromContainerJob::new(vuinput_state.ns_of_requestor.clone(),input_device.devnode.clone(),input_device.syspath.clone(),input_device.major,input_device.minor);
                 JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(remove_job));
             }
-
 
             ui_dev_destroy(fd).unwrap();
             fuse_lowlevel::fuse_reply_ioctl(_req, 0, std::ptr::null(), 0);

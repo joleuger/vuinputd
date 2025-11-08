@@ -9,6 +9,9 @@ name = "keyboard-advanced"
 [[bin]]
 name = "mouse-advanced"
 
+[[bin]]
+name = "mouse-reuse"
+
 [dependencies]
 uinput-ioctls = { path = "../uinput-ioctls" }
 nix = { version = "0.30", features = ["ioctl"] } # ioctl & libc bindings
