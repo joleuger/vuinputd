@@ -31,7 +31,7 @@ impl Pid {
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq, Hash)]
-struct NamespaceInodes {
+struct Namespaces {
     pub net: Option<u64>,
     pub uts: Option<u64>,
     pub ipc: Option<u64>,
@@ -43,18 +43,6 @@ struct NamespaceInodes {
     pub time: Option<u64>,
     pub time_for_children: Option<u64>,
 
-}
-
-// this is static for the architecture
-fn compat_uses_64bit_time() -> bool {
-    let uname = nix::sys::utsname::uname().unwrap();
-    let arch = uname.machine().to_str().unwrap();
-
-    match arch {
-        "x86_64" => false,
-        "ppc64" => false, // some setups still 32-bit time_t
-        _ => true, // arm64, riscv64, s390x all use 64-bit
-    }
 }
 
 /// Returns true if the process with `pid` is a 32-bit (compat) process. None, if unsure.
@@ -84,25 +72,25 @@ pub fn is_compat_process(pid: i32) -> Option<bool> {
 
 // TODO: Rename to capture all relevant process information
 #[derive(Debug, Default, Clone, Eq, PartialEq, Hash)]
-pub struct Namespaces {
+pub struct RequestingProcess {
     pub nspath: String,
     pub nsroot: String,
-    nsinodes: NamespaceInodes,
-}
-
-impl NamespaceInodes {
-    pub fn equal_mnt_and_net(&self, other: &NamespaceInodes) -> bool {
-        self.mnt == other.mnt && self.net == other.net
-    }
+    nsinodes: Namespaces,
 }
 
 impl Namespaces {
     pub fn equal_mnt_and_net(&self, other: &Namespaces) -> bool {
+        self.mnt == other.mnt && self.net == other.net
+    }
+}
+
+impl RequestingProcess {
+    pub fn equal_mnt_and_net(&self, other: &RequestingProcess) -> bool {
         self.nsinodes.equal_mnt_and_net(&other.nsinodes)
     }
 }
 
-impl std::fmt::Display for Namespaces {
+impl std::fmt::Display for RequestingProcess {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Namespaces:")?;
         writeln!(f, "  net:  {:?}", self.nsinodes.net)?;
@@ -119,14 +107,14 @@ impl std::fmt::Display for Namespaces {
     }
 }
 
-fn get_namespace_inodes(pid: Pid) -> NamespaceInodes {
+fn get_namespace_inodes(pid: Pid) -> Namespaces {
     let pid: String = match pid {
         Pid::Pid(pid) => pid.to_string(),
         Pid::SelfPid => "self".to_string(),
     };
     let nspath = format!("/proc/{}/ns", pid);
 
-    let mut ns = NamespaceInodes {
+    let mut ns = Namespaces {
         net: None,
         uts: None,
         ipc: None,
@@ -183,7 +171,7 @@ fn get_ppid(pid: Pid) -> Option<Pid> {
 
 
 
-pub fn get_namespaces(pid: Pid) -> Namespaces {
+pub fn get_namespaces(pid: Pid) -> RequestingProcess {
 
     match pid {
         Pid::Pid(_) =>
@@ -211,7 +199,7 @@ pub fn get_namespaces(pid: Pid) -> Namespaces {
 
             let nspath = format!("{}/ns", pid.path());
             let nsroot = format!("{}/ns", ppid.path());
-            Namespaces {
+            RequestingProcess {
                 nspath: nspath,
                 nsroot: nsroot,
                 nsinodes: nsinodes,
@@ -221,7 +209,7 @@ pub fn get_namespaces(pid: Pid) -> Namespaces {
         {
             let nsinodes = get_namespace_inodes(pid);
             let nspath = format!("{}/ns", pid.path());
-            Namespaces {
+            RequestingProcess {
                 nspath: nspath.clone(),
                 nsroot: nspath,
                 nsinodes: nsinodes,
@@ -232,7 +220,7 @@ pub fn get_namespaces(pid: Pid) -> Namespaces {
 
 /// Runs a function inside the given network and mount namespaces.
 /// Returns the child PID so the caller can `waitpid` on it.
-pub fn run_in_net_and_mnt_namespace(ns: Namespaces, func: Box<dyn Fn()>) -> nix::Result<nix::unistd::Pid> {
+pub fn run_in_net_and_mnt_namespace(ns: RequestingProcess, func: Box<dyn Fn()>) -> nix::Result<nix::unistd::Pid> {
     //Note: The child process is created with a single thread—the one that called fork().
 
     match unsafe { fork()? } {

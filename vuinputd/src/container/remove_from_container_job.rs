@@ -9,12 +9,12 @@ use async_pidfd::AsyncPidFd;
 use log::debug;
 
 use crate::{
-    container::{mknod_input_device::{ensure_input_device, remove_input_device}, netlink_message::send_udev_monitor_message_with_properties, runtime_data::{self, delete_udev_data, ensure_udev_structure, read_udev_data, write_udev_data}}, jobs::job::{Job, JobTarget}, monitor_udev::EVENT_STORE, namespace::{Namespaces, run_in_net_and_mnt_namespace}
+    container::{mknod_input_device::{ensure_input_device, remove_input_device}, netlink_message::send_udev_monitor_message_with_properties, runtime_data::{self, delete_udev_data, ensure_udev_structure, read_udev_data, write_udev_data}}, jobs::job::{Job, JobTarget}, monitor_udev::EVENT_STORE, requesting_process::{RequestingProcess, run_in_net_and_mnt_namespace}
 };
 
 #[derive(Clone,Debug)]
 pub struct RemoveFromContainerJob {
-    namespaces: Namespaces,
+    requesting_process: RequestingProcess,
     target: JobTarget,
     dev_path: String,
     sys_path: String,
@@ -23,10 +23,10 @@ pub struct RemoveFromContainerJob {
 }
 
 impl RemoveFromContainerJob {
-    pub fn new(namespaces: Namespaces,dev_path: String, sys_path: String, major: u64, minor: u64) -> Self {
+    pub fn new(requesting_process: RequestingProcess,dev_path: String, sys_path: String, major: u64, minor: u64) -> Self {
         Self {
-            namespaces: namespaces.clone(),
-            target: JobTarget::Container(namespaces),
+            requesting_process: requesting_process.clone(),
+            target: JobTarget::Container(requesting_process),
             dev_path: dev_path,
             sys_path: sys_path,
             major: major ,
@@ -75,7 +75,7 @@ impl RemoveFromContainerJob {
         let minor=self.minor;
 
         let _ = netlink_data.insert("ACTION".to_string(),"remove".to_string());
-        let child_pid = run_in_net_and_mnt_namespace(self.namespaces, Box::new(move || {
+        let child_pid = run_in_net_and_mnt_namespace(self.requesting_process, Box::new(move || {
             // TODO: we should keep the same order as event_execute_rules_on_remove in 
             // https://github.com/systemd/systemd/blob/main/src/udev/udev-event.c
             

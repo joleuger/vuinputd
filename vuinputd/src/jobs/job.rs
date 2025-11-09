@@ -11,7 +11,7 @@ use std::sync::Mutex;
 use std::thread::{self, JoinHandle};
 use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 
-use crate::namespace::Namespaces;
+use crate::requesting_process::RequestingProcess;
 
 // To discuss:
 // what we handle here, could also be named Task. The decision for job was more or less
@@ -25,7 +25,7 @@ pub enum JobTarget {
     Host,
     BackgroundLoop,
     /// A specific container or namespace target.
-    Container(Namespaces),
+    Container(RequestingProcess),
 }
 
 pub trait Job: Send + 'static {

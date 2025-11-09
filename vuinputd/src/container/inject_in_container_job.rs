@@ -9,12 +9,12 @@ use async_pidfd::AsyncPidFd;
 use log::debug;
 
 use crate::{
-    container::{mknod_input_device::ensure_input_device, netlink_message::send_udev_monitor_message_with_properties, runtime_data::{self, ensure_udev_structure, read_udev_data, write_udev_data}}, jobs::job::{Job, JobTarget}, monitor_udev::EVENT_STORE, namespace::{run_in_net_and_mnt_namespace, Namespaces}
+    container::{mknod_input_device::ensure_input_device, netlink_message::send_udev_monitor_message_with_properties, runtime_data::{self, ensure_udev_structure, read_udev_data, write_udev_data}}, jobs::job::{Job, JobTarget}, monitor_udev::EVENT_STORE, requesting_process::{run_in_net_and_mnt_namespace, RequestingProcess}
 };
 
 #[derive(Clone,Debug)]
 pub struct InjectInContainerJob {
-    namespaces: Namespaces,
+    requesting_process: RequestingProcess,
     target: JobTarget,
     dev_path: String,
     sys_path: String,
@@ -23,10 +23,10 @@ pub struct InjectInContainerJob {
 }
 
 impl InjectInContainerJob {
-    pub fn new(namespaces: Namespaces,dev_path: String, sys_path: String, major: u64, minor: u64) -> Self {
+    pub fn new(requesting_process: RequestingProcess,dev_path: String, sys_path: String, major: u64, minor: u64) -> Self {
         Self {
-            namespaces: namespaces.clone(),
-            target: JobTarget::Container(namespaces),
+            requesting_process: requesting_process.clone(),
+            target: JobTarget::Container(requesting_process),
             dev_path: dev_path,
             sys_path: sys_path,
             major: major ,
@@ -99,7 +99,7 @@ impl InjectInContainerJob {
         let netlink_data = netlink_data.unwrap();
 
 
-        let child_pid = run_in_net_and_mnt_namespace(self.namespaces, Box::new(move || {
+        let child_pid = run_in_net_and_mnt_namespace(self.requesting_process, Box::new(move || {
 
             if let Err(e) = ensure_input_device(self.dev_path.clone(), self.major, self.minor) {
                 debug!("Error creating input device {}: {e}",self.dev_path.clone());
