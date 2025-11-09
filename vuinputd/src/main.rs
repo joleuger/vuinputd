@@ -97,7 +97,9 @@ static VUINPUT_COUNTER: OnceLock<AtomicU64> = OnceLock::new();
 static VUINPUT_STATE: OnceLock<RwLock<HashMap<VuFileHandle, Arc<Mutex<VuInputState>>>>> = OnceLock::new();
 static JOB_DISPATCHER: OnceLock<Mutex<Dispatcher>>= OnceLock::new();
 static SELF_NAMESPACES: OnceLock<Namespaces>= OnceLock::new();
-static DEDUP_LAST_ERROR: OnceLock<Mutex<Option<(u64,VuError)>>> = OnceLock::new();
+
+// For log limiting. Idea: Move to log_limit crate
+static DEDUP_LAST_ERROR: OnceLock<Mutex<Option<(u64,VuError)>>> = OnceLock::new(); 
 
 
 const SYS_INPUT_DIR: &str = "/sys/devices/virtual/input/";
@@ -221,6 +223,9 @@ unsafe extern "C" fn vuinput_open(
         }
     }
 }
+
+
+// TODO: compat-mode+ ensure sizeof(struct input_event)
 unsafe extern "C" fn vuinput_write(
     _req: fuse_lowlevel::fuse_req_t,
     _buf: *const c_char,

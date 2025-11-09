@@ -8,8 +8,7 @@ use nix::{
     unistd::{fork, ForkResult},
 };
 use std::{
-    fs::{self, File},
-    os::fd::AsFd, path::{self, Path}, process, thread, time::Duration,
+    fs::{self, File}, io::Read, os::fd::AsFd, path::{self, Path}, process, thread, time::Duration
 };
 
 use std::io::{self, BufRead};
@@ -46,6 +45,44 @@ struct NamespaceInodes {
 
 }
 
+// this is static for the architecture
+fn compat_uses_64bit_time() -> bool {
+    let uname = nix::sys::utsname::uname().unwrap();
+    let arch = uname.machine().to_str().unwrap();
+
+    match arch {
+        "x86_64" => false,
+        "ppc64" => false, // some setups still 32-bit time_t
+        _ => true, // arm64, riscv64, s390x all use 64-bit
+    }
+}
+
+/// Returns true if the process with `pid` is a 32-bit (compat) process. None, if unsure.
+pub fn is_compat_process(pid: i32) -> Option<bool> {
+    const EI_CLASS: usize = 4;
+    const ELFCLASS32: u8 = 1;
+    const ELFCLASS64: u8 = 2;
+
+    let exe_path = format!("/proc/{}/exe", pid);
+    let mut buf = [0u8; 5];
+
+    match File::open(&exe_path).and_then(|mut f| f.read_exact(&mut buf)) {
+        Ok(()) => {
+            // ELF magic check
+            if &buf[0..4] != b"\x7FELF" {
+                return None;
+            }
+            match buf[EI_CLASS] {
+                ELFCLASS32 => Some(true),
+                ELFCLASS64 => Some(false),
+                _ => None,
+            }
+        }
+        Err(_) => None,
+    }
+}
+
+// TODO: Rename to capture all relevant process information
 #[derive(Debug, Default, Clone, Eq, PartialEq, Hash)]
 pub struct Namespaces {
     pub nspath: String,
