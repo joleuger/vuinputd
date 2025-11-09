@@ -31,7 +31,7 @@ impl Pid {
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq, Hash)]
-struct Namespaces {
+pub struct Namespaces {
     pub net: Option<u64>,
     pub uts: Option<u64>,
     pub ipc: Option<u64>,
@@ -46,27 +46,34 @@ struct Namespaces {
 }
 
 /// Returns true if the process with `pid` is a 32-bit (compat) process. None, if unsure.
-pub fn is_compat_process(pid: i32) -> Option<bool> {
-    const EI_CLASS: usize = 4;
-    const ELFCLASS32: u8 = 1;
-    const ELFCLASS64: u8 = 2;
+pub fn is_compat_process(pid: Pid) -> Option<bool> {
 
-    let exe_path = format!("/proc/{}/exe", pid);
-    let mut buf = [0u8; 5];
+    match pid {
+        Pid::Pid(pid) => {
+            const EI_CLASS: usize = 4;
+            const ELFCLASS32: u8 = 1;
+            const ELFCLASS64: u8 = 2;
 
-    match File::open(&exe_path).and_then(|mut f| f.read_exact(&mut buf)) {
-        Ok(()) => {
-            // ELF magic check
-            if &buf[0..4] != b"\x7FELF" {
-                return None;
-            }
-            match buf[EI_CLASS] {
-                ELFCLASS32 => Some(true),
-                ELFCLASS64 => Some(false),
-                _ => None,
+            let exe_path = format!("/proc/{}/exe", pid);
+            let mut buf = [0u8; 5];
+
+            match File::open(&exe_path).and_then(|mut f| f.read_exact(&mut buf)) {
+                Ok(()) => {
+                    // ELF magic check
+                    if &buf[0..4] != b"\x7FELF" {
+                        return None;
+                    }
+                    match buf[EI_CLASS] {
+                        ELFCLASS32 => Some(true),
+                        ELFCLASS64 => Some(false),
+                        _ => None,
+                    }
+                }
+                Err(_) => None,
             }
         }
-        Err(_) => None,
+        Pid::SelfPid =>
+            unreachable!()
     }
 }
 
@@ -75,7 +82,8 @@ pub fn is_compat_process(pid: i32) -> Option<bool> {
 pub struct RequestingProcess {
     pub nspath: String,
     pub nsroot: String,
-    nsinodes: Namespaces,
+    pub namespaces: Namespaces,
+    pub is_compat: bool,
 }
 
 impl Namespaces {
@@ -86,28 +94,32 @@ impl Namespaces {
 
 impl RequestingProcess {
     pub fn equal_mnt_and_net(&self, other: &RequestingProcess) -> bool {
-        self.nsinodes.equal_mnt_and_net(&other.nsinodes)
+        self.namespaces.equal_mnt_and_net(&other.namespaces)
+    }
+
+    pub fn equal_mnt_and_net_ns(&self, other: &Namespaces) -> bool {
+        self.namespaces.equal_mnt_and_net(&other)
     }
 }
 
 impl std::fmt::Display for RequestingProcess {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Namespaces:")?;
-        writeln!(f, "  net:  {:?}", self.nsinodes.net)?;
-        writeln!(f, "  uts:  {:?}", self.nsinodes.uts)?;
-        writeln!(f, "  ipc:  {:?}", self.nsinodes.ipc)?;
-        writeln!(f, "  pid:  {:?}", self.nsinodes.pid)?;
-        writeln!(f, "  pid_for_children:  {:?}", self.nsinodes.pid_for_children)?;
-        writeln!(f, "  user: {:?}", self.nsinodes.user)?;
-        writeln!(f, "  mnt:  {:?}", self.nsinodes.mnt)?;
-        writeln!(f, "  cgroup:  {:?}", self.nsinodes.cgroup)?;
-        writeln!(f, "  time:  {:?}", self.nsinodes.time)?;
-        writeln!(f, "  time_for_children:  {:?}", self.nsinodes.time_for_children)?;
+        writeln!(f, "  net:  {:?}", self.namespaces.net)?;
+        writeln!(f, "  uts:  {:?}", self.namespaces.uts)?;
+        writeln!(f, "  ipc:  {:?}", self.namespaces.ipc)?;
+        writeln!(f, "  pid:  {:?}", self.namespaces.pid)?;
+        writeln!(f, "  pid_for_children:  {:?}", self.namespaces.pid_for_children)?;
+        writeln!(f, "  user: {:?}", self.namespaces.user)?;
+        writeln!(f, "  mnt:  {:?}", self.namespaces.mnt)?;
+        writeln!(f, "  cgroup:  {:?}", self.namespaces.cgroup)?;
+        writeln!(f, "  time:  {:?}", self.namespaces.time)?;
+        writeln!(f, "  time_for_children:  {:?}", self.namespaces.time_for_children)?;
         Ok(())
     }
 }
 
-fn get_namespace_inodes(pid: Pid) -> Namespaces {
+pub fn get_namespace(pid: Pid) -> Namespaces {
     let pid: String = match pid {
         Pid::Pid(pid) => pid.to_string(),
         Pid::SelfPid => "self".to_string(),
@@ -171,21 +183,37 @@ fn get_ppid(pid: Pid) -> Option<Pid> {
 
 
 
-pub fn get_namespaces(pid: Pid) -> RequestingProcess {
+pub fn get_requesting_process(pid: Pid) -> RequestingProcess {
 
     match pid {
         Pid::Pid(_) =>
         {
+            let is_compat = match is_compat_process(pid) {
+                Some(true) => {
+                    debug!("identified process {} as 64 bit process",pid.path());
+                    false
+                },
+                Some(false) => {
+                    debug!("identified process {} as 32 bit process",pid.path());
+                    true
+                },
+                None => {
+                    debug!("could not identify bitness of process {}. Assume 64 bit process",pid.path());
+                    false
+                },
+            };
+
+
             // go up the parent hierarchy until we find a parent with different namespaces
             let mut ppid = pid;
-            let nsinodes = get_namespace_inodes(pid);
+            let nsinodes = get_namespace(pid);
             loop {
                 let candidate_ppid = get_ppid(ppid);
                 match candidate_ppid {
                     None => break,
                     Some(candidate_ppid) =>
                     {
-                        let ppid_nsinodes = get_namespace_inodes(candidate_ppid);
+                        let ppid_nsinodes = get_namespace(candidate_ppid);
                         if nsinodes.equal_mnt_and_net(&ppid_nsinodes) {
                             ppid=candidate_ppid;
                         } else {
@@ -202,18 +230,13 @@ pub fn get_namespaces(pid: Pid) -> RequestingProcess {
             RequestingProcess {
                 nspath: nspath,
                 nsroot: nsroot,
-                nsinodes: nsinodes,
+                namespaces: nsinodes,
+                is_compat: is_compat
             }
         },
         Pid::SelfPid =>
         {
-            let nsinodes = get_namespace_inodes(pid);
-            let nspath = format!("{}/ns", pid.path());
-            RequestingProcess {
-                nspath: nspath.clone(),
-                nsroot: nspath,
-                nsinodes: nsinodes,
-            }
+            unreachable!();
         },
     }
 }

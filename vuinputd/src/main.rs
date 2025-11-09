@@ -96,7 +96,7 @@ enum VuError {
 static VUINPUT_COUNTER: OnceLock<AtomicU64> = OnceLock::new();
 static VUINPUT_STATE: OnceLock<RwLock<HashMap<VuFileHandle, Arc<Mutex<VuInputState>>>>> = OnceLock::new();
 static JOB_DISPATCHER: OnceLock<Mutex<Dispatcher>>= OnceLock::new();
-static SELF_REQUESTING_PROCESSES: OnceLock<RequestingProcess>= OnceLock::new();
+static VUINPUTD_NAMESPACES: OnceLock<Namespaces>= OnceLock::new();
 
 // For log limiting. Idea: Move to log_limit crate
 static DEDUP_LAST_ERROR: OnceLock<Mutex<Option<(u64,VuError)>>> = OnceLock::new(); 
@@ -193,8 +193,8 @@ unsafe extern "C" fn vuinput_open(
     let fh = get_fresh_filehandle();
     let ctx = fuse_lowlevel::fuse_req_ctx(_req);
     debug!("fh {}: opened by process id {} (host view)", fh, (*ctx).pid);
-    let namespaces = get_namespaces(Pid::Pid((*ctx).pid));
-    debug!("fh {}: namespaces {}", fh, namespaces);
+    let requesting_process = get_requesting_process(Pid::Pid((*ctx).pid));
+    debug!("fh {}: namespaces {}", fh, requesting_process);
     // namespaces net:4026531840, uts:4026531838, ipc:4026531839, pid:4026531836, pid_for_children:4026531836, user:4026531837, mnt:4026531841, cgroup:4026531835, time:4026531834, time_for_children:4026531834
     (*_fi).fh = fh;
     // Open the path in read-only mode, returns `io::Result<File>`
@@ -210,7 +210,7 @@ unsafe extern "C" fn vuinput_open(
                 &VuFileHandle::from_fuse_file_info(_fi.as_ref().unwrap()),
                 VuInputState {
                     file: v,
-                    requesting_process: namespaces,
+                    requesting_process,
                     input_device: None
                 },
             )
@@ -238,6 +238,7 @@ unsafe extern "C" fn vuinput_write(
         "vuinput_write: offset needs to be 0 but is {}",
         _off
     );
+    
     let fh = &(*_fi).fh;
     let slice = std::slice::from_raw_parts(_buf as *const u8, _size);
     let vuinput_state_mutex = get_vuinput_state(&VuFileHandle::from_fuse_file_info(_fi.as_ref().unwrap())).unwrap();
@@ -281,12 +282,20 @@ unsafe extern "C" fn vuinput_write(
         return;
     }
 
-    let result = vuinput_state.file.write_all(slice);
+    let chunksize = std::mem::size_of::<libc::input_event>();
 
+    let mut bytes = 0;
+    let mut result = Result::Ok(());
+
+    while bytes + chunksize <= _size && result.is_ok() {
+        result = vuinput_state.file.write_all(&slice[bytes..bytes + chunksize]);
+        bytes += chunksize;
+    }
+    
     match result {
         Ok(_) => {
-            trace!("wrote {} bytes", _size);
-            fuse_lowlevel::fuse_reply_write(_req, _size);
+            debug!("wrote {} bytes", bytes);
+            fuse_lowlevel::fuse_reply_write(_req, bytes);
         }
         Err(e) => {
             let mut last_error = DEDUP_LAST_ERROR.get().unwrap().lock().unwrap();
@@ -317,7 +326,7 @@ unsafe extern "C" fn vuinput_release(
     // Only do this in case it has not already been done by the ioctl UI_DEV_DESTROY
     // this here is relevant if the process was killed and didn't have the chance to send the
     // ioctl UI_DEV_DESTROY.
-    if input_device.is_some() && ! SELF_REQUESTING_PROCESSES.get().unwrap().equal_mnt_and_net(&vuinput_state.requesting_process) {
+    if input_device.is_some() && ! VUINPUTD_NAMESPACES.get().unwrap().equal_mnt_and_net(&vuinput_state.requesting_process.namespaces) {
         let input_device = input_device.unwrap();
         let remove_job=RemoveFromContainerJob::new(vuinput_state.requesting_process.clone(),input_device.devnode.clone(),input_device.syspath.clone(),input_device.major,input_device.minor);
         JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(remove_job));
@@ -485,7 +494,7 @@ unsafe extern "C" fn vuinput_ioctl(
             vuinput_state.input_device = Some(VuInputDevice {cuse_fh:*fh, major: major, minor: minor, syspath: sysname.clone(), devnode: devnode.clone(), runtime_data: None, netlink_data: None });
 
             // Create device in container, if the request was really from another namespace
-            if ! SELF_REQUESTING_PROCESSES.get().unwrap().equal_mnt_and_net(&vuinput_state.requesting_process) {
+            if ! VUINPUTD_NAMESPACES.get().unwrap().equal_mnt_and_net(&vuinput_state.requesting_process.namespaces) {
                 let inject_job=InjectInContainerJob::new(vuinput_state.requesting_process.clone(),devnode.clone(),sysname.clone(),major,minor);
                 JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(inject_job));
             }
@@ -500,7 +509,7 @@ unsafe extern "C" fn vuinput_ioctl(
             let input_device = vuinput_state.input_device.take();
 
             // Remove device in container, if the request was really from another namespace
-            if input_device.is_some() && ! SELF_REQUESTING_PROCESSES.get().unwrap().equal_mnt_and_net(&vuinput_state.requesting_process) {
+            if input_device.is_some() && ! VUINPUTD_NAMESPACES.get().unwrap().equal_mnt_and_net(&vuinput_state.requesting_process.namespaces) {
                 let input_device = input_device.unwrap();
                 let remove_job=RemoveFromContainerJob::new(vuinput_state.requesting_process.clone(),input_device.devnode.clone(),input_device.syspath.clone(),input_device.major,input_device.minor);
                 JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(remove_job));
@@ -724,7 +733,7 @@ fn main() -> std::io::Result<()> {
     VUINPUT_STATE.set(RwLock::new(HashMap::new())).unwrap();
     VUINPUT_COUNTER.set(AtomicU64::new(3)).unwrap();
     JOB_DISPATCHER.set(Mutex::new(Dispatcher::new())).unwrap();
-    SELF_REQUESTING_PROCESSES.set(get_namespaces(Pid::SelfPid)).unwrap();
+    VUINPUTD_NAMESPACES.set(get_namespace(Pid::SelfPid)).unwrap();
     DEDUP_LAST_ERROR.set(Mutex::new(None)).unwrap();
     JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(MonitorBackgroundLoop::new()));
 
