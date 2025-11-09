@@ -39,6 +39,8 @@ use uinput_ioctls::*;
 
 pub mod requesting_process;
 pub mod monitor_udev;
+pub mod compat;
+use crate::compat::input_event_compat;
 use crate::container::inject_in_container_job::InjectInContainerJob;
 use crate::container::remove_from_container_job::RemoveFromContainerJob;
 use crate::monitor_udev::MonitorBackgroundLoop;
@@ -282,19 +284,32 @@ unsafe extern "C" fn vuinput_write(
         return;
     }
 
-    let chunksize = std::mem::size_of::<libc::input_event>();
-
     let mut bytes = 0;
     let mut result = Result::Ok(());
 
-    while bytes + chunksize <= _size && result.is_ok() {
-        result = vuinput_state.file.write_all(&slice[bytes..bytes + chunksize]);
-        bytes += chunksize;
-    }
+    let compat_size= std::mem::size_of::<input_event_compat>();
+    let normal_size= std::mem::size_of::<libc::input_event>();
+    let is_compat = vuinput_state.requesting_process.is_compat;
+    
+    if !is_compat {
+        while bytes + normal_size <= _size && result.is_ok() {
+            result = vuinput_state.file.write_all(&slice[bytes..bytes + normal_size]);
+            bytes += normal_size; 
+        }
+    } else {
+        while bytes + compat_size <= _size && result.is_ok() {
+            let compat = _buf.byte_add(bytes) as *const input_event_compat;
+            let normal = compat::map_to_64_bit(&*compat);
+            let normal_ptr=(&normal as *const libc::input_event) as *const u8;
+            let slice = std::slice::from_raw_parts(normal_ptr,normal_size);
+            result = vuinput_state.file.write_all(&slice);
+            bytes += compat_size; 
+        }
+    };
     
     match result {
         Ok(_) => {
-            debug!("wrote {} bytes", bytes);
+            trace!("wrote {} of {} bytes (compat {})", bytes,_size,is_compat);
             fuse_lowlevel::fuse_reply_write(_req, bytes);
         }
         Err(e) => {
@@ -709,18 +724,6 @@ fn check_permissions() -> Result<(), std::io::Error> {
                         .for_each(move |x| debug!("{}",x));
             Ok(())
         })
-}
-
-// this is static for the architecture
-pub fn compat_uses_64bit_time() -> bool {
-    let uname = nix::sys::utsname::uname().unwrap();
-    let arch = uname.machine().to_str().unwrap();
-
-    match arch {
-        "x86_64" => false,
-        "ppc64" => false, // some setups still 32-bit time_t
-        _ => true, // arm64, riscv64, s390x all use 64-bit
-    }
 }
 
 fn main() -> std::io::Result<()> {

@@ -189,11 +189,11 @@ pub fn get_requesting_process(pid: Pid) -> RequestingProcess {
         Pid::Pid(_) =>
         {
             let is_compat = match is_compat_process(pid) {
-                Some(true) => {
+                Some(false) => {
                     debug!("identified process {} as 64 bit process",pid.path());
                     false
                 },
-                Some(false) => {
+                Some(true) => {
                     debug!("identified process {} as 32 bit process",pid.path());
                     true
                 },
