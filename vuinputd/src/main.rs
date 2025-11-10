@@ -269,15 +269,17 @@ unsafe extern "C" fn vuinput_write(
 
         // setup abs
         for code in  0..libc::ABS_CNT{
-            let mut abs_setup: uinput_abs_setup = unsafe { std::mem::zeroed() };
-            abs_setup.code=code.try_into().unwrap();
-            abs_setup.absinfo.maximum = (*legacy_uinput_user_dev).absmax[code];
-            abs_setup.absinfo.minimum = (*legacy_uinput_user_dev).absmin[code];
-            abs_setup.absinfo.fuzz = (*legacy_uinput_user_dev).absfuzz[code];
-            abs_setup.absinfo.flat = (*legacy_uinput_user_dev).absflat[code];
+            if (*legacy_uinput_user_dev).absmax[code] != 0 || (*legacy_uinput_user_dev).absmin[code] != 0 {
+                let mut abs_setup: uinput_abs_setup = unsafe { std::mem::zeroed() };
+                abs_setup.code=code.try_into().unwrap();
+                abs_setup.absinfo.maximum = (*legacy_uinput_user_dev).absmax[code];
+                abs_setup.absinfo.minimum = (*legacy_uinput_user_dev).absmin[code];
+                abs_setup.absinfo.fuzz = (*legacy_uinput_user_dev).absfuzz[code];
+                abs_setup.absinfo.flat = (*legacy_uinput_user_dev).absflat[code];
 
-            let abs_setup_ptr = &mut abs_setup as *mut uinput_abs_setup;
-            ui_abs_setup(fd, abs_setup_ptr).unwrap();
+                let abs_setup_ptr = &mut abs_setup as *mut uinput_abs_setup;
+                ui_abs_setup(fd, abs_setup_ptr).unwrap();
+            }
         }
 
         fuse_lowlevel::fuse_reply_write(_req, _size);
@@ -285,24 +287,26 @@ unsafe extern "C" fn vuinput_write(
     }
 
     let mut bytes = 0;
-    let mut result = Result::Ok(());
+    let mut result = Result::Ok(0);
 
     let compat_size= std::mem::size_of::<input_event_compat>();
     let normal_size= std::mem::size_of::<libc::input_event>();
     let is_compat = vuinput_state.requesting_process.is_compat;
+    // TODO: ARM: && !compat_uses_64bit_time()
     
     if !is_compat {
         while bytes + normal_size <= _size && result.is_ok() {
-            result = vuinput_state.file.write_all(&slice[bytes..bytes + normal_size]);
+            result = vuinput_state.file.write(&slice[bytes..bytes + normal_size]);
             bytes += normal_size; 
         }
     } else {
         while bytes + compat_size <= _size && result.is_ok() {
-            let compat = _buf.byte_add(bytes) as *const input_event_compat;
+            let position= _buf.byte_add(bytes);
+            let compat = position as *const input_event_compat;
             let normal = compat::map_to_64_bit(&*compat);
             let normal_ptr=(&normal as *const libc::input_event) as *const u8;
             let slice = std::slice::from_raw_parts(normal_ptr,normal_size);
-            result = vuinput_state.file.write_all(&slice);
+            result = vuinput_state.file.write(&slice);
             bytes += compat_size; 
         }
     };
@@ -513,6 +517,10 @@ unsafe extern "C" fn vuinput_ioctl(
                 let inject_job=InjectInContainerJob::new(vuinput_state.requesting_process.clone(),devnode.clone(),sysname.clone(),major,minor);
                 JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(inject_job));
             }
+
+            // write a SYN-event (which is just zeros) just for validation
+            let syn_event : [u8; 24] = [0; 24];
+            vuinput_state.file.write_all(&syn_event).unwrap();
 
             // hard code 2 second sleep
             std::thread::sleep(std::time::Duration::from_secs(2));
