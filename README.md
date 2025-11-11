@@ -87,10 +87,8 @@ It reliably demonstrates the core concept — exposing `/dev/uinput` devices ins
 
 ### ✅ Goals for Production Readiness
 
-* [ ] **Device reuse:**
-  Ensure the daemon handles device reuse properly. This is used by steam.
-
-* [ ] **Delete devices in container only once:**
+* [ ] **Steam input support:**
+  Steam input is not supported, yet. For some strange reasons, steam creates 16 virtual devices. Maybe a race.
 
 * [ ] **Error handling and recovery:**
   Ensure the daemon gracefully handles container shutdowns, device races, and failed mounts without leaks or undefined states.
