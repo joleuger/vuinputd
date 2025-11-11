@@ -2,7 +2,7 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
-use std::{collections::HashMap, future::Future, pin::Pin, time::Duration};
+use std::{collections::HashMap, future::Future, pin::Pin, sync::{Arc, Condvar, Mutex}, time::Duration};
 
 use async_io::Timer;
 use async_pidfd::AsyncPidFd;
@@ -12,6 +12,15 @@ use crate::{
     container::{mknod_input_device::{ensure_input_device, remove_input_device}, netlink_message::send_udev_monitor_message_with_properties, runtime_data::{self, delete_udev_data, ensure_udev_structure, read_udev_data, write_udev_data}}, jobs::job::{Job, JobTarget}, monitor_udev::EVENT_STORE, requesting_process::{RequestingProcess, run_in_net_and_mnt_namespace}
 };
 
+
+#[derive(Clone,Debug,Copy,PartialOrd,PartialEq)]
+pub enum State {
+    Initialized,
+    Started,
+    Finished,
+}
+
+
 #[derive(Clone,Debug)]
 pub struct RemoveFromContainerJob {
     requesting_process: RequestingProcess,
@@ -20,6 +29,7 @@ pub struct RemoveFromContainerJob {
     sys_path: String,
     major: u64,
     minor: u64,
+    sync_state: Arc<(Mutex<State>,Condvar)>,
 }
 
 impl RemoveFromContainerJob {
@@ -31,8 +41,30 @@ impl RemoveFromContainerJob {
             sys_path: sys_path,
             major: major ,
             minor: minor,
+            sync_state: Arc::new((Mutex::new(State::Initialized), Condvar::new())),
         }
     }
+    fn set_state(&self, new_state: &State) -> () {
+        let (lock, cvar) = &*self.sync_state;
+        let mut current_state = lock.lock().unwrap();
+        *current_state = *new_state;
+        // We notify the condvar that the value has changed.
+        cvar.notify_all();
+    }
+
+    pub fn get_awaiter_for_state(&self) -> impl FnOnce(&State) -> () {
+        // pattern is described on https://doc.rust-lang.org/stable/std/sync/struct.Condvar.html
+        let sync_state = self.sync_state.clone();
+        let awaiter =  move | state: &State|  {
+            let (lock, cvar) = &*sync_state;
+            let mut current_state = lock.lock().unwrap();
+            while *state <= *current_state {
+                current_state = cvar.wait(current_state).unwrap();
+            }
+        };
+        awaiter
+    }
+
 }
 
 impl Job for RemoveFromContainerJob {
@@ -55,6 +87,8 @@ impl Job for RemoveFromContainerJob {
 
 impl RemoveFromContainerJob {
     async fn remove_from_container(self) {
+        self.set_state(&State::Started);
+
         let netlink_event = match EVENT_STORE.get().unwrap().lock().unwrap().take(&self.sys_path) {
             Some(netlink_event) => netlink_event,
             None => {
@@ -73,9 +107,10 @@ impl RemoveFromContainerJob {
         let mut netlink_data = netlink_data.unwrap().clone();
         let major = self.major;
         let minor=self.minor;
+        let dev_path = self.dev_path.clone();
 
         let _ = netlink_data.insert("ACTION".to_string(),"remove".to_string());
-        let child_pid = run_in_net_and_mnt_namespace(self.requesting_process, Box::new(move || {
+        let child_pid = run_in_net_and_mnt_namespace(&self.requesting_process, Box::new(move || {
             // TODO: we should keep the same order as event_execute_rules_on_remove in 
             // https://github.com/systemd/systemd/blob/main/src/udev/udev-event.c
             
@@ -83,14 +118,15 @@ impl RemoveFromContainerJob {
             if let Err(e) = delete_udev_data(major,minor) {
                 debug!("Error deleting udev data for {}:{}: {e}",major,minor);
             }
-            if let Err(e) = remove_input_device(self.dev_path.clone(), self.major, self.minor) {
-                debug!("Error removing input device {}: {e}",self.dev_path.clone());
+            if let Err(e) = remove_input_device(dev_path.clone(), self.major, self.minor) {
+                debug!("Error removing input device {}: {e}",dev_path.clone());
             };
 
         }))
         .expect("subprocess should work");
         let pid_fd = AsyncPidFd::from_pid(child_pid.as_raw()).unwrap();
         let _exit_info = pid_fd.wait().await.unwrap();
+        self.set_state(&State::Finished);
 
     }
 }

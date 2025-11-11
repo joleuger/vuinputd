@@ -243,7 +243,7 @@ pub fn get_requesting_process(pid: Pid) -> RequestingProcess {
 
 /// Runs a function inside the given network and mount namespaces.
 /// Returns the child PID so the caller can `waitpid` on it.
-pub fn run_in_net_and_mnt_namespace(ns: RequestingProcess, func: Box<dyn Fn()>) -> nix::Result<nix::unistd::Pid> {
+pub fn run_in_net_and_mnt_namespace(ns: &RequestingProcess, func: Box<dyn Fn()>) -> nix::Result<nix::unistd::Pid> {
     //Note: The child process is created with a single thread—the one that called fork().
 
     match unsafe { fork()? } {

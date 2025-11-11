@@ -348,7 +348,9 @@ unsafe extern "C" fn vuinput_release(
     if input_device.is_some() && ! VUINPUTD_NAMESPACES.get().unwrap().equal_mnt_and_net(&vuinput_state.requesting_process.namespaces) {
         let input_device = input_device.unwrap();
         let remove_job=RemoveFromContainerJob::new(vuinput_state.requesting_process.clone(),input_device.devnode.clone(),input_device.syspath.clone(),input_device.major,input_device.minor);
+        let awaiter = remove_job.get_awaiter_for_state();
         JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(remove_job));
+        awaiter(&container::remove_from_container_job::State::Finished);
     }
 
     drop(vuinput_state);
@@ -515,15 +517,14 @@ unsafe extern "C" fn vuinput_ioctl(
             // Create device in container, if the request was really from another namespace
             if ! VUINPUTD_NAMESPACES.get().unwrap().equal_mnt_and_net(&vuinput_state.requesting_process.namespaces) {
                 let inject_job=InjectInContainerJob::new(vuinput_state.requesting_process.clone(),devnode.clone(),sysname.clone(),major,minor);
+                let awaiter = inject_job.get_awaiter_for_state();
                 JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(inject_job));
+                awaiter(&container::inject_in_container_job::State::Finished);
             }
 
             // write a SYN-event (which is just zeros) just for validation
             let syn_event : [u8; 24] = [0; 24];
             vuinput_state.file.write_all(&syn_event).unwrap();
-
-            // hard code 2 second sleep
-            std::thread::sleep(std::time::Duration::from_secs(2));
 
             fuse_lowlevel::fuse_reply_ioctl(_req, 0, std::ptr::null(), 0);
         }
@@ -535,7 +536,9 @@ unsafe extern "C" fn vuinput_ioctl(
             if input_device.is_some() && ! VUINPUTD_NAMESPACES.get().unwrap().equal_mnt_and_net(&vuinput_state.requesting_process.namespaces) {
                 let input_device = input_device.unwrap();
                 let remove_job=RemoveFromContainerJob::new(vuinput_state.requesting_process.clone(),input_device.devnode.clone(),input_device.syspath.clone(),input_device.major,input_device.minor);
+                let awaiter = remove_job.get_awaiter_for_state();
                 JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(remove_job));
+                awaiter(&container::remove_from_container_job::State::Finished)
             }
 
             ui_dev_destroy(fd).unwrap();
