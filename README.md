@@ -114,6 +114,12 @@ It reliably demonstrates the core concept — exposing `/dev/uinput` devices ins
 * [ ] **Distribution and packaging:**
   Provide a deb/rpm package for simple deployment.
 
+* [ ] **Check for compatibility with steam runtime:**
+  https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/blob/main/steam-runtime-tools/input-device.c
+  https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/blob/main/docs/container-runtime.md
+  https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/blob/main/docs/ld-library-path-runtime.md
+  https://github.com/ValveSoftware/steam-for-linux/issues/10175?utm_source=chatgpt.com
+
 ---
 
 

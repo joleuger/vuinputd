@@ -11,7 +11,8 @@ Restart=on-failure
 #CapabilityBoundingSet=CAP_SYS_ADMIN CAP_MKNOD CAP_DAC_OVERRIDE CAP_FOWNER
 #DeviceAllow=/dev/uinput rw
 #DeviceAllow=/dev/cuse rw
-DeviceAllow=char-* rwm # we need the permission to create all sorts of devices
+# we need the permission to create all sorts of devices
+DeviceAllow=char-* rwm
 
 
 [Install]
