@@ -16,6 +16,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+    - name: Download dependencies
+      run: sudo apt install -y build-essential libc6-dev libfuse3-dev pkg-config fuse3 libudev-dev
     - name: Build
       run: cargo build --verbose
     - name: Run tests
