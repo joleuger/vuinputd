@@ -2,13 +2,14 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
+use async_io::Async;
 use log::debug;
 use nix::{
     sched::{setns, CloneFlags},
     unistd::{fork, ForkResult},
 };
 use std::{
-    fs::{self, File}, io::Read, os::fd::AsFd, path::{self, Path}, process, thread, time::Duration
+    fs::{self, File}, io::Read, os::fd::{AsFd, FromRawFd, OwnedFd, RawFd}, path::{self, Path}, process, thread, time::Duration
 };
 
 use std::io::{self, BufRead};
@@ -269,5 +270,44 @@ pub fn run_in_net_and_mnt_namespace(ns: &RequestingProcess, func: Box<dyn Fn()>)
             func();
             std::process::exit(0);
         }
+    }
+}
+
+pub async fn await_process(pid: Pid) -> io::Result<i32> {
+
+    match pid {
+        Pid::Pid(pid) =>
+        {
+            unsafe  {
+                // Use pidfd_open() (libc) to get a real FD
+                let pidfd = libc::syscall(libc::SYS_pidfd_open, pid, 0);
+                if pidfd == -1 {
+                    return Err(io::Error::last_os_error())
+                }
+                let owned_fd = OwnedFd::from_raw_fd(pidfd as RawFd);
+
+                // Wait asynchronously on the pidfd
+                let async_adapter = Async::new(owned_fd)?;
+                async_adapter.readable().await?;
+
+                // Retrieve the exit code using waitid()
+                let mut si: libc::siginfo_t = std::mem::zeroed();
+                let r = libc::waitid(
+                    libc::P_PID,
+                    pid as u32,
+                    &mut si,
+                    libc::WEXITED | libc::WNOWAIT,
+                );
+                if r != 0 {
+                    return Err(io::Error::last_os_error());
+                }
+
+                Ok(si.si_status())
+            }
+        },
+        Pid::SelfPid =>
+        {
+            unreachable!();
+        },
     }
 }

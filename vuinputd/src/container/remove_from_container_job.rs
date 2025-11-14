@@ -5,11 +5,10 @@
 use std::{collections::HashMap, future::Future, pin::Pin, sync::{Arc, Condvar, Mutex}, time::Duration};
 
 use async_io::Timer;
-use async_pidfd::AsyncPidFd;
 use log::debug;
 
 use crate::{
-    container::{mknod_input_device::{ensure_input_device, remove_input_device}, netlink_message::send_udev_monitor_message_with_properties, runtime_data::{self, delete_udev_data, ensure_udev_structure, read_udev_data, write_udev_data}}, jobs::job::{Job, JobTarget}, monitor_udev::EVENT_STORE, requesting_process::{RequestingProcess, run_in_net_and_mnt_namespace}
+    container::{mknod_input_device::{ensure_input_device, remove_input_device}, netlink_message::send_udev_monitor_message_with_properties, runtime_data::{self, delete_udev_data, ensure_udev_structure, read_udev_data, write_udev_data}}, jobs::job::{Job, JobTarget}, monitor_udev::EVENT_STORE, requesting_process::{Pid, RequestingProcess, await_process, run_in_net_and_mnt_namespace}
 };
 
 
@@ -124,8 +123,7 @@ impl RemoveFromContainerJob {
 
         }))
         .expect("subprocess should work");
-        let pid_fd = AsyncPidFd::from_pid(child_pid.as_raw()).unwrap();
-        let _exit_info = pid_fd.wait().await.unwrap();
+        let _exit_info = await_process(Pid::Pid(child_pid.as_raw())).await;
         self.set_state(&State::Finished);
 
     }

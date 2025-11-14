@@ -1,0 +1,32 @@
+Source: vuinputd
+Section: utils
+Priority: optional
+Maintainer: Johannes Leupolz <dev@leupolz.eu>
+Build-Depends: debhelper (>= 12),
+ dh-cargo (>= 24),
+ dh-sequence-bash-completion,
+ cargo:native,
+ rustc:native,
+ pkg-config,
+ libudev-dev,
+ librust-nix-dev,  
+ librust-libc-dev,  
+ librust-time-dev,  
+ librust-log-dev,  
+ librust-env-logger-dev,  
+ librust-libudev-dev,  
+ librust-regex-dev,  
+ librust-async-channel-dev,  
+ librust-futures-dev,  
+ librust-async-io-dev,
+ librust-anyhow-dev,
+ pkg-config,  
+ build-essential
+Standards-Version: 4.6.0
+Homepage: https://github.com/joleuger/vuinputd
+Rules-Requires-Root: no
+
+Package: vuinputd
+Architecture: amd64
+Depends: ${shlibs:Depends}, ${misc:Depends}
+Description: Virtual input forwarder for Linux.

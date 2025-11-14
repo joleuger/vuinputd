@@ -50,3 +50,13 @@ udevadm control --reload
 systemctl daemon-reload
 systemctl enable --now vuinputd
 ```
+
+## Debian
+
+```
+apt-get install build-essential devscripts debhelper cargo rustc dh-cargo
+apt-get install debhelper dh-cargo dh-sequence-bash-completion cargo:native rustc:native librust-nix-dev librust-libc-dev librust-time-dev librust-log-dev librust-env-logger-dev librust-libudev-dev librust-regex-dev librust-async-channel-dev librust-futures-dev librust-async-io-dev librust-anyhow-dev
+
+dpkg-buildpackage -us -uc
+
+```

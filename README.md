@@ -119,6 +119,7 @@ It reliably demonstrates the core concept — exposing `/dev/uinput` devices ins
   https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/blob/main/docs/container-runtime.md
   https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/blob/main/docs/ld-library-path-runtime.md
   https://github.com/ValveSoftware/steam-for-linux/issues/10175?utm_source=chatgpt.com
+  https://github.com/ValveSoftware/steam-for-linux/issues/8042
 
 * [ ] **Forward known controller pids automatically:**
   The main reason that vuinputd overrides pids is to ensure that those are not used by the host by accident, especially for keyboards that otherwise might get a seat assigned. This is irrelevant for gamepads. So the pids of known gamepads can just be forwarded. This is relevant for the 360 input devices that are created by steam.

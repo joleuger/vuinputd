@@ -1,0 +1,7 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: vuinputd
+Source: https://github.com/joleuger/vuinputd
+
+Files: *
+Copyright: 2025 Johannes Leupolz <dev@leupolz.eu>
+License: MIT
