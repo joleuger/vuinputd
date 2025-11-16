@@ -296,7 +296,7 @@ pub async fn await_process(pid: Pid) -> io::Result<i32> {
                     libc::P_PID,
                     pid as u32,
                     &mut si,
-                    libc::WEXITED | libc::WNOWAIT,
+                    libc::WEXITED,
                 );
                 if r != 0 {
                     return Err(io::Error::last_os_error());

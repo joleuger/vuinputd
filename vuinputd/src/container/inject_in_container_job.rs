@@ -119,6 +119,7 @@ impl InjectInContainerJob {
             if runtime_data.is_none() {
                 debug!("Give up reading runtime data");
             }
+            self.set_state(&State::Finished);
             return;
         }
 
@@ -143,7 +144,7 @@ impl InjectInContainerJob {
 
         }))
         .expect("subprocess should work");
-        let _exit_info = await_process(Pid::Pid(child_pid.as_raw())).await;
+        let _exit_info = await_process(Pid::Pid(child_pid.as_raw())).await.unwrap();
         self.set_state(&State::Finished);
 
     }

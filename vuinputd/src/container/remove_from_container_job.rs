@@ -92,12 +92,14 @@ impl RemoveFromContainerJob {
             Some(netlink_event) => netlink_event,
             None => {
                 debug!("do nothing, because the device has never been announced via netlink");
+                self.set_state(&State::Finished);
                 return;
             }
         };
 
         if netlink_event.tombstone {
             debug!("do nothing, because the device has already been removed in the meantime");
+            self.set_state(&State::Finished);
             return;
         }
         let netlink_data=netlink_event.add_data;

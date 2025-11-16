@@ -520,6 +520,7 @@ unsafe extern "C" fn vuinput_ioctl(
                 let awaiter = inject_job.get_awaiter_for_state();
                 JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(inject_job));
                 awaiter(&container::inject_in_container_job::State::Finished);
+                debug!("fh {}: injecting dev-nodes in container has been finished ", fh);
             }
 
             // write a SYN-event (which is just zeros) just for validation
@@ -538,7 +539,8 @@ unsafe extern "C" fn vuinput_ioctl(
                 let remove_job=RemoveFromContainerJob::new(vuinput_state.requesting_process.clone(),input_device.devnode.clone(),input_device.syspath.clone(),input_device.major,input_device.minor);
                 let awaiter = remove_job.get_awaiter_for_state();
                 JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(remove_job));
-                awaiter(&container::remove_from_container_job::State::Finished)
+                awaiter(&container::remove_from_container_job::State::Finished);
+                debug!("fh {}: removing dev-nodes from container has been finished ", fh);
             }
 
             ui_dev_destroy(fd).unwrap();
