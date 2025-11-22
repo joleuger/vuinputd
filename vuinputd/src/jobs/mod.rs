@@ -33,3 +33,6 @@
 
 pub mod closure_job;
 pub mod job;
+
+#[cfg(test)]
+mod tests;

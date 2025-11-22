@@ -11,7 +11,7 @@ pub struct ClosureJob {
     desc: String,
     execute_after_cancellation: bool,
     target: JobTarget,
-    task_creator: Box<dyn Fn(JobTarget) -> Pin<Box<dyn Future<Output = ()>>> + Send + 'static>,
+    task_creator: Box<dyn Fn(&ClosureJob) -> Pin<Box<dyn Future<Output = ()>>> + Send + 'static>,
 }
 
 impl ClosureJob {
@@ -20,7 +20,7 @@ impl ClosureJob {
         target: JobTarget,
         execute_after_cancellation: bool,
         f: Box<
-            dyn Fn(JobTarget) -> Pin<Box<dyn Future<Output = ()>>> // closure returns any future
+            dyn Fn(&ClosureJob) -> Pin<Box<dyn Future<Output = ()>>> // closure returns any future
                 + Send // the closure itself can be sent across threads
                 + 'static,
         >,
@@ -46,8 +46,7 @@ impl Job for ClosureJob {
 
     fn create_task(self: &ClosureJob) -> Pin<Box<dyn Future<Output = ()>>> {
         let creator = &self.task_creator;
-        let target = self.job_target();
-        let task = creator(target);
+        let task = creator(self);
         task
     }
 
@@ -66,7 +65,8 @@ pub fn example() {
         "Host maintenance",
         JobTarget::Host,
         false,
-        Box::new(|target| {
+        Box::new(|job: &ClosureJob| {
+            let target = job.target.clone();
             Box::pin(async move {
                 println!("Running host job on {:?}", target);
             })
