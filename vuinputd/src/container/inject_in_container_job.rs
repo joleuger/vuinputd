@@ -56,7 +56,7 @@ impl InjectInContainerJob {
         let awaiter =  move | state: &State|  {
             let (lock, cvar) = &*sync_state;
             let mut current_state = lock.lock().unwrap();
-            while *state <= *current_state {
+            while *current_state  < *state  {
                 current_state = cvar.wait(current_state).unwrap();
             }
         };
