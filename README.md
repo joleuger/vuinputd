@@ -124,6 +124,10 @@ It reliably demonstrates the core concept — exposing `/dev/uinput` devices ins
 * [ ] **Forward known controller pids automatically:**
   The main reason that vuinputd overrides pids is to ensure that those are not used by the host by accident, especially for keyboards that otherwise might get a seat assigned. This is irrelevant for gamepads. So the pids of known gamepads can just be forwarded. This is relevant for the 360 input devices that are created by steam.
 
+ * [ ] **Hidraw in Proton** 
+  https://github.com/selkies-project/selkies/pull/173
+  https://github.com/GloriousEggroll/proton-ge-custom/blob/master/docs/CONTROLLERS.md
+
 ---
 
 

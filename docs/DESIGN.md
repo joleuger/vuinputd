@@ -2,7 +2,7 @@
 
 ## 1. Introduction
 
-This project provides a safe, general-purpose way to run [Sunshine](https://github.com/LizardByte/Sunshine) and other applications that use `/dev/uinput` **inside containers** — including `systemd-nspawn`, Docker, LXC, Podman, and similar runtimes.
+This project provides a safe, general-purpose way to run [Sunshine](https://github.com/LizardByte/Sunshine), Steam Input, and other applications that use `/dev/uinput` **inside containers** — including `systemd-nspawn`, Docker, LXC, Podman, and similar runtimes.
 
 Applications like Sunshine require creating virtual input devices (`/dev/uinput`) for keyboards, mice, and controllers.  
 Naively bind-mounting `/dev/uinput` from the host into a container breaks isolation: a container could create devices visible to other containers or even the host, leading to unwanted input injection and security risks.
@@ -31,6 +31,7 @@ This device can be bind-mounted into a container as /dev/uinput, so applications
 sequenceDiagram
 box transparent Host
 participant uinput (kernel)
+participant udevd
 participant vuinputd
 participant vuinput (host)
 end
@@ -48,43 +49,351 @@ uinput (container)-->vuinput (host): is equal (bind mount)
 vuinput (host)->>vuinputd: forward data
 vuinputd->>uinput (kernel): forward data
 uinput (kernel)->>eventX: create /dev/input/eventX
-uinput (kernel)->>vuinputd: announce new device via udev
-vuinputd->>libinput/game: announce new device via udev
+uinput (kernel)->>udevd: announce new device via netlink
+udevd->>vuinputd: announce new device via netlink
+vuinputd->>libinput/game: announce new device via netlink
 libinput/game->>eventX: open /dev/input/eventX
 ```
+
+`vuinputd` forwards udev events into the container via netlink, because otherwise the game in the container would not recognize when its net namespace is different from the one of udevd.
 
 ---
 
 ## 3. Design Decisions
 
-### 3.1 Where `/dev/uinput` lives
+This section describes *why* the architecture works, which invariants it relies on, and why the implementation is correct given the constraints of `/dev/uinput`, udev, containers, CUSE, and Rust’s async model.
 
-* **Decision**: Provide a fake `/dev/vuinput` backed by host proxy. This character device can be bind mounted inside containers to `/dev/uinput`.
-* **Why**: Prevents containers from creating devices visible system-wide.
+The key idea: **vuinputd linearizes the requests to create or destroy devices from a container**, and replays the linearized device generation actions in the container in a strict order per container.
 
-### 3.2 Prevent host from using devices
+---
 
-* **Decision**: udev rules strip `ID_INPUT_KEYBOARD` and `ID_INPUT_MOUSE`, set `ID_SEAT=seat_vuinput`.
-* **Why**: Ensures devices are invisible to host input subsystems while still available in containers.
+## **3.1 Source of Truth: The CUSE Device (`/dev/vuinput`)**
 
-### 3.3 udev events in containers
+### **Decision**
 
-* **Decision**: Proxy forwards udev events into the container via netlink.
-* **Why**: Without this, SDL2 and libinput might not recognize devices correctly; with it, containers behave as if devices were created locally.
+The only authoritative source of truth about devices is the set of **active clients connected to the CUSE implementation** (`/dev/vuinput`).
 
-### 3.4 Where to run the proxy
+### **Rationale**
 
-* **Decision**: Run proxy on host, one instance per container.
-* **Why**: Only host can safely access `/dev/uinput` and enforce mediation.
+Clients intentionally open `/dev/uinput` to create virtual devices.
+Those clients → via the container → bind mount → map to `/dev/vuinput` host-side.
 
-### 3.5 Security trade-off
+Therefore:
 
-* **Decision**: Accept that host always sees devices, but enforce rules to stop it consuming them.
-* **Why**: Full input namespaces don’t exist in Linux today; mediation is the practical compromise.
+* **Every relevant device originates from an explicit open() request**
+* Clients *must* communicate the device’s lifetime to vuinputd (via file handle lifetime)
+* The daemon can unambiguously map:
 
-### 3.6 Compatibility
-* **Runtimes supported:** Works with systemd-nspawn, Docker, LXC, Podman, and other container engines.  
-* **Applications supported:** Any program that writes to `/dev/uinput`, including Sunshine, custom input injectors, and game streaming servers.
+  * which container the client belongs to (from CUSE file handle metadata)
+  * which input devices belong to which client
+  * when a client terminates (file descriptor closes)
+
+---
+
+## **3.2 Event Dispatcher and Job Engine**
+
+The system uses a **single-threaded job engine** that processes events sequentially. Job
+This engine runs:
+
+* udev events
+* internal jobs (hotplug propagation, cleanup, reconciliation)
+
+CUSE events (open, ioctl, write, close) happen in a separate thread and may trigger jobs in the job engine.
+
+### **Decision**
+
+Use a “logically single-threaded” dispatcher with async/await for I/O.
+
+### **Why this is correct**
+
+Even though Rust’s async runtime may move tasks between OS threads, the dispatcher ensures:
+
+* only **one mutation** happens at a time
+* jobs should be relatively short or have async waiting points (awaits)
+* async I/O does not break ordering, because state mutations always occur inside the central job loop
+
+### **Invariants ensured**
+
+1. **No two jobs mutate global state concurrently**
+2. **All jobs are serialized**
+3. **Await points do not allow interleaving jobs affecting the same container**
+5. **Awaiting in one container allows progress in another container**
+
+This is the core of correctness.
+
+### ** Implementation Details on the job engine **
+
+This subsection documents the concrete behaviour, invariants and policies implemented by the Dispatcher (the job engine). It is intentionally precise and maps to the code: `src/jobs/*` and `src/jobs/job.rs`.
+
+**What the Dispatcher is**
+
+* A logically single-threaded job executor that serializes *all* state-mutating work.
+* Implementation lives in `src/jobs/job.rs` (type `Dispatcher`) and `src/jobs/*`.
+
+**Core job targets / types**
+
+* `JobTarget::Host` — host-global jobs (maintenance, one of jobs).
+* `JobTarget::BackgroundLoop` — long-lived background tasks (udev monitor loop).
+* `JobTarget::Container(RequestingProcess)` — per-container jobs, strictly ordered per container.
+
+**Common concrete jobs (examples)**
+
+* `InjectInContainerJob` — create device node in container, write udev runtime data, send udev add.
+* `RemoveFromContainerJob` — remove device node, delete runtime data, send udev remove.
+* `MonitorBackgroundLoop` — reads host udev events and populates `EVENT_STORE`.
+
+**Ordering guarantees**
+
+* Jobs are FIFO per `JobTarget`.
+* BackgroundLoop jobs are spawned independent of per-target queues.
+* The dispatcher may spawn new per-target loops lazily on first job.
+* No two jobs for the same `JobTarget` run concurrently.
+
+**Why this matters**
+
+* Strict serialization per target prevents device lifecycle races (create/remove) for a given container.
+* Global or host-level jobs are separate so they don't block per-container sequencing.
+
+**Code pointers**
+
+* Dispatcher implementation: `src/jobs/job.rs` (`Dispatcher`, `get_or_spawn_target_loop`, `job_target_loop`)
+* Per-target job queues: `async_channel::unbounded()`
+* Background loop registration: `JobTarget::BackgroundLoop` special-case spawning
+* Event storage: `src/monitor_udev.rs` (`EVENT_STORE`) — jobs read and consume entries from it
+* Example jobs: `src/container/inject_in_container_job.rs`, `src/container/remove_from_container_job.rs`, `src/monitor_udev.rs` (background)
+
+---
+
+## **3.3 Combined Queue: Creation, Updates, Cleanup**
+
+### **Decision**
+
+A *single* queue per container holds all jobs affecting this container.
+
+### **Why a single queue is correct**
+
+Because events must follow strict causality:
+
+* A CUSE open → must be followed by corresponding uinput device creation
+* A cleanup (fd closed) → must be applied before the device is reused
+* forwarding events → must happen after device creation is fully committed
+
+Executing the jobs directly would create opportunities for:
+
+* unintended interleavings ors reorderings
+* partially applied lifecycle transitions
+* delivering udev signals before device registration
+* cleanup before creation
+* or worse — cleanup of a new device based on stale IDs
+
+A single queue avoids all of this.
+
+### **Why ordering issues cannot happen**
+
+Because:
+
+* the dispatcher processes events strictly FIFO
+* each mutation step is atomic
+* every step sees consistent internal state
+* cleanup is just another state transition, not a special phase
+
+---
+
+## **3.4 Device State Model and Convergence**
+
+Every device is represented by a state machine:
+
+```
+Nonexistent → Creating → Live → PendingCleanup → Removed
+```
+
+The key correctness property:
+
+### **Decision**
+
+State transitions are monotonic and idempotent.
+
+### **Meaning**
+
+If the dispatcher sees any event (udev add/remove, client close, reconciliation trigger), it will:
+
+1. re-evaluate the device's intended state
+2. re-evaluate the observed state
+3. compute the delta
+4. run the next monotonic transition
+
+This ensures:
+
+* No transition can "undo" a future one
+* Unexpected udev events (late, missing, reordered) cannot create inconsistencies
+* A device will *eventually* reach correct state regardless of event order
+
+### **Why this guarantees correctness**
+
+As long as:
+
+* intended state is derived solely from CUSE clients
+* observed state is derived from udev
+* transitions are deterministic and monotonic
+
+the system **always converges** to the correct overall state.
+This is CRDT-like behaviour (convergent replicated state machine), but simpler.
+
+---
+
+## **3.5 Integration with Container Runtimes**
+
+### **Decision**
+
+Every host-created `/dev/input/eventX` is tagged:
+
+* `ID_SEAT=seat_vuinput`
+* stripped of `ID_INPUT_KEYBOARD=1`, `ID_INPUT_MOUSE=1`
+* placed into the correct container’s device namespace via bind-mount, cgroup association, or namespace logic
+
+### **Rationale**
+
+The host must:
+
+* see device nodes (kernel requires this)
+* but must *not* consume them
+* while containers must believe they were created locally
+
+### **Why tagging is correct**
+
+On the host:
+
+* libinput ignores devices with no `ID_INPUT_*`
+* tag-based routing ensures correct multi-container isolation
+* per-container udev forwarding ensures applications like SDL/libinput behave normally
+
+Inside containers:
+
+* the device node exists
+* udev hotplug events are synthesized and delivered
+* container-side libraries operate normally
+
+---
+
+## **3.6 Cleanups and Race-Free Destruction**
+
+### **Decision**
+
+Cleanup is triggered by:
+
+* CUSE fd closure
+* udev “remove” events
+* container teardown
+* daemon shutdown
+* late reconciliation jobs
+
+Cleanup **does not need to be a dedicated final phase** — it is part of normal operation.
+
+### **Why no race conditions**
+
+Because:
+
+1. cleanup is just another serialized job in the dispatcher
+2. cleanup transitions are monotonic (“Live → PendingCleanup → Removed”)
+3. device destruction happens only after:
+
+   * CUSE client is gone
+   * forwarding is complete
+   * all references are released
+4. udev “remove” events are treated as hints, not authoritative commands
+
+### **Result**
+
+No “use after free”, no double cleanup, no ghost devices.
+
+---
+
+## **3.7 Why This Implementation Is Correct**
+
+The design is correct because it satisfies:
+
+### **Correctness Criteria**
+
+1. **Isolation**
+   Containers cannot interfere with each other or with host input.
+
+2. **Safety**
+   Device lifecycle is serialized, deterministic, and race-free.
+
+3. **Eventual Convergence**
+   Regardless of event order, the system converges to the correct set of live devices.
+
+4. **Compatibility**
+   Applications requiring `/dev/uinput` behave identically to native host execution.
+
+### **Proof Sketch**
+
+Because:
+
+* the dispatcher is single-threaded at the logical mutation level
+* intended state is derived from a single authoritative source (CUSE)
+* observed state from udev never overrides intended state
+* transitions are monotonic and idempotent
+* cleanup is serialized and non-destructive to future transitions
+
+→ The system behaves like a deterministic state machine and cannot diverge.
+
+---
+
+## 3.8 Implementation notes on the CUSE front-end (open/write/ioctl/release)`
+
+**Summary**
+The CUSE front-end implements `/dev/vuinput` and maps guest operations to host actions. It is *not* a passive pipe; it holds per-handle state and must obey the dispatcher rules: short-running operations in CUSE callbacks (data-plane), heavy or state-mutating operations scheduled as dispatcher jobs (control-plane). The module therefore has two responsibilities:
+
+* **Per-handle data plane**: parse/wrap ioctls, translate writes (input_event → uinput), handle legacy vs compat event formats, produce SYN events.
+* **Control-plane dispatching**: schedule `InjectInContainerJob`, `RemoveFromContainerJob` (and other lifecycle jobs) and wait on their completion.
+
+**Blocking / IO in callbacks**
+
+CUSE callbacks must not perform long-blocking work on the FUSE thread. Long operations (mknod, writing `/run/udev/data`, sending netlink, waiting for container namespace exec) must be executed in jobs dispatched to the Dispatcher. If a callback must wait for job completion, it must use a small wait primitive (condvar) to block only the caller thread for as little as necessary and avoid locking dispatcher mutexes while waiting.
+
+*Why:* reduce risk of deadlock and avoid starving other FUSE callbacks.
+
+**IOCTL handling policy**
+
+Variable-length ioctls are handled by using `fuse_reply_ioctl_retry` to request correct buffer sizing. The callback must validate sizes and respond with `fuse_reply_ioctl_retry` only when necessary, otherwise reply directly. Special-case ioctls (UI_DEV_CREATE, UI_DEV_DESTROY, UI_DEV_SETUP, UI_GET_SYSNAME, UI_GET_VERSION) must be handled on the data plane and schedule control jobs for side effects.
+
+**Compat/Alignment & memory-safety**
+
+All pointer-to-userdata handling must be done with `read_unaligned` or copying into properly aligned stack locals before creating slices or reinterpreting them. Do not retain pointers into ephemeral stack memory across writes; create owned buffers for any data that must survive until the next syscall.
+
+**Error reporting & log dedup**
+
+CUSE front-end deduplicates repeating errors (write failures) to reduce log spam but must still emit at least one full diagnostic with device identifiers (filehandle, devnode, major:minor, container). Deduplication should not hide critical first-occurrence context.
+
+*Why:* helps debugging without overwhelming logs.
+
+**Response semantics**
+
+Use the correct FUSE reply: `fuse_reply_open`, `fuse_reply_write`, `fuse_reply_ioctl` for success; `fuse_reply_err` for error codes; `fuse_reply_none` for `release` where appropriate. Do not reply with error code 0 using `fuse_reply_err` — prefer `fuse_reply_none` or the matching success reply.
+
+*Why:* avoid confusing FUSE/kernel semantics and accidental error returns.
+
+**Resource lifecycle & refcounts**
+
+Per-handle state is stored as `Arc<Mutex<VuInputState>>`. CUSE callbacks must hold only short-lived locks. When a handle is closed, the release callback must remove the state via a dispatcher job if needed and then release its Arc; any long-running cleanup must be scheduled.
+
+*Why:* prevents deadlocks and reference cycles.
+
+**Blocking while awaiting job completion**
+
+If a callback synchronously waits for job completion (the current implementation uses a Condvar awaiter), it must not hold any global locks (Dispatcher lock, global state lock) while waiting. The wait must be limited and should log timeouts when exceeded.
+
+*Why:* prevents deadlocks (dispatcher needs that same mutex to execute jobs).
+
+**Compatibility & architecture notes**
+
+When mapping 32-bit compat input_event formats into 64-bit representation, copy data into properly aligned locals and then write; do not create slices pointing at temporaries. Provide clear tests for compat conversion for each architecture supported.
+
+*Why:* correctness across bitness.
+
+**Single-threaded CUSE in foreground mode**
+no high volume of events expected where we could benefit from multiple threads. But much of the code is already prepared for multithreading, if there is really demand.
 ---
 
 ## 4. Security Considerations
@@ -111,6 +420,8 @@ While this design is necessary for mediation, it introduces potential attack sur
 * [ ] Use **seccomp** or `systemd` sandboxing (`ProtectSystem`, `ProtectKernelTunables`, `RestrictNamespaces`, etc.).
 * [ ] Eventually migrate to **Rust-native FUSE/Netlink** bindings to remove unsafe dependencies.
 
+
+
 ## 5. Alternative Approaches
 
 ### 5.1 trace accesses of /dev/uinput with eBPF
@@ -135,3 +446,13 @@ Inside the trace program you will typically use:
 
 #### 4) Use of `pidfd_getfd`
 The **`pidfd_getfd()`** syscall (introduced in Linux 5.6, see `man pidfd_getfd(2)`) allows one process to **duplicate a file descriptor from another process** into its own FD table. It takes a *pidfd* (obtained via `pidfd_open()` or from `CLONE_PIDFD`), the target FD number in the remote process, and optional flags. The resulting descriptor refers to the **same open file description**—sharing offset, status flags, and driver state—exactly as if the target process had called `dup()`. Permission checks apply: the caller must either share credentials (same UID) or hold `CAP_SYS_PTRACE` or an equivalent capability over the target. This makes `pidfd_getfd()` the canonical and race-free way to inspect or reuse another process’s device handles (for example, to run `UI_GET_SYSNAME` on a client apps' fd on `/dev/uinput` ) without invasive ptrace tricks.
+
+
+### 5.2 LD_PRELOAD
+See src/fake-uinput/README.md on wolf
+
+https://github.com/games-on-whales/wolf/issues/81
+
+https://github.com/games-on-whales/wolf/pull/88
+
+https://github.com/zerofltexx/wolf/commit/5b3282ceef6373c5afd2a860365c886fa942f59c#diff-2446d8f27f6ac4efff38510458548cea92179eddf38c187f5ad90d6bdd4b3d69
