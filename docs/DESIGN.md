@@ -121,7 +121,7 @@ Even though Rust’s async runtime may move tasks between OS threads, the dispat
 
 This is the core of correctness.
 
-### ** Implementation Details on the job engine **
+### **Implementation Details on the job engine**
 
 This subsection documents the concrete behaviour, invariants and policies implemented by the Dispatcher (the job engine). It is intentionally precise and maps to the code: `src/jobs/*` and `src/jobs/job.rs`.
 
@@ -340,7 +340,7 @@ Because:
 
 ---
 
-## 3.8 Implementation notes on the CUSE front-end (open/write/ioctl/release)`
+## 3.8 Implementation notes on the CUSE front-end (open/write/ioctl/release)
 
 **Summary**
 The CUSE front-end implements `/dev/vuinput` and maps guest operations to host actions. It is *not* a passive pipe; it holds per-handle state and must obey the dispatcher rules: short-running operations in CUSE callbacks (data-plane), heavy or state-mutating operations scheduled as dispatcher jobs (control-plane). The module therefore has two responsibilities:
@@ -393,7 +393,8 @@ When mapping 32-bit compat input_event formats into 64-bit representation, copy 
 *Why:* correctness across bitness.
 
 **Single-threaded CUSE in foreground mode**
-no high volume of events expected where we could benefit from multiple threads. But much of the code is already prepared for multithreading, if there is really demand.
+
+No high volume of events expected where we could benefit from multiple threads. But much of the code is already prepared for multithreading, if there is really demand.
 ---
 
 ## 4. Security Considerations
