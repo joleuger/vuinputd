@@ -57,6 +57,116 @@ libinput/game->>eventX: open /dev/input/eventX
 
 `vuinputd` forwards udev events into the container via netlink, because otherwise the game in the container would not recognize when its net namespace is different from the one of udevd.
 
+The external visible state is determined by actions originating from the following locations (WIP):
+1) userspace
+1.1) ioctl UI_DEV_CREATE to open file handle of `/dev/uinput`
+2) the linux kernel (device creation)
+2.1)  uinput_create_device [uinput.c](https://github.com/torvalds/linux/blob/master/drivers/input/misc/uinput.c)
+2.2) input_register_device [input.c](https://github.com/torvalds/linux/blob/master/drivers/input/input.c)
+2.3) device_add in [core.c](https://github.com/torvalds/linux/blob/master/drivers/base/core.c)
+2.3.1) device_create_file in [core.c](https://github.com/torvalds/linux/blob/master/drivers/base/core.c): create sysfs attribute file for device.
+2.3.2) create diverse symlinks and data for the sysfs entry
+2.3.3) kobject_uevent in [kobject_uevent](https://github.com/torvalds/linux/blob/master/lib/kobject_uevent.c) notify user space via netlink with `DEVPATH` set to the sysfs entry under `/sys`, e.g., `/devices/virtual/input/input97`
+3) udev in userspace
+- udev_event_execute_rules in [udev-event.c](https://github.com/systemd/systemd/blob/main/src/udev/udev-event.c#)
+
+
+Example of kernel messages that were send via netlink
+
+```
+KERNEL[1674737.476205] add      /devices/virtual/input/input155 (input)
+ACTION=add
+DEVPATH=/devices/virtual/input/input155
+SUBSYSTEM=input
+PRODUCT=3/beef/dead/0
+NAME="Example device"
+PROP=0
+EV=7
+KEY=10000 0 0 0 0
+REL=3
+MODALIAS=input:b0003vBEEFpDEADe0000-e0,1,2,k110,r0,1,amlsfw
+SEQNUM=18608
+
+KERNEL[1674737.476270] add      /devices/virtual/input/input155/mouse2 (input)
+ACTION=add
+DEVPATH=/devices/virtual/input/input155/mouse2
+SUBSYSTEM=input
+DEVNAME=/dev/input/mouse2
+SEQNUM=18609
+MAJOR=13
+MINOR=34
+
+KERNEL[1674737.476328] add      /devices/virtual/input/input155/event12 (input)
+ACTION=add
+DEVPATH=/devices/virtual/input/input155/event12
+SUBSYSTEM=input
+DEVNAME=/dev/input/event12
+SEQNUM=18610
+MAJOR=13
+MINOR=76
+```
+
+Example of udev (after adding the hwdb and rules entries)
+```
+UDEV  [1674737.478882] add      /devices/virtual/input/input155 (input)
+ACTION=add
+DEVPATH=/devices/virtual/input/input155
+SUBSYSTEM=input
+PRODUCT=3/beef/dead/0
+NAME="Example device"
+PROP=0
+EV=7
+KEY=10000 0 0 0 0
+REL=3
+MODALIAS=input:b0003vBEEFpDEADe0000-e0,1,2,k110,r0,1,amlsfw
+SEQNUM=18608
+USEC_INITIALIZED=1674737476194
+ID_VUINPUT=1
+ID_INPUT=1
+.INPUT_CLASS=mouse
+ID_SERIAL=noserial
+ID_VUINPUT_MOUSE=1
+ID_SEAT=seat_vuinput
+TAGS=:seat:
+CURRENT_TAGS=:seat:
+
+UDEV  [1674737.480016] add      /devices/virtual/input/input155/mouse2 (input)
+ACTION=add
+DEVPATH=/devices/virtual/input/input155/mouse2
+SUBSYSTEM=input
+DEVNAME=/dev/input/mouse2
+SEQNUM=18609
+USEC_INITIALIZED=1674737477357
+ID_INPUT=1
+ID_INPUT_MOUSE=1
+.INPUT_CLASS=mouse
+ID_SERIAL=noserial
+ID_SEAT=seat_vuinput
+MAJOR=13
+MINOR=34
+TAGS=:seat_vuinput:
+CURRENT_TAGS=:seat_vuinput:
+
+UDEV  [1674737.498627] add      /devices/virtual/input/input155/event12 (input)
+ACTION=add
+DEVPATH=/devices/virtual/input/input155/event12
+SUBSYSTEM=input
+DEVNAME=/dev/input/event12
+SEQNUM=18610
+USEC_INITIALIZED=1674737477373
+ID_VUINPUT=1
+.HAVE_HWDB_PROPERTIES=1
+ID_INPUT=1
+.INPUT_CLASS=mouse
+ID_SERIAL=noserial
+ID_SEAT=seat_vuinput
+ID_VUINPUT_MOUSE=1
+MAJOR=13
+MINOR=76
+TAGS=:seat_vuinput:
+CURRENT_TAGS=:seat_vuinput:
+```
+
 ---
 
 ## 3. Design Decisions
