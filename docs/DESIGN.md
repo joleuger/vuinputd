@@ -57,115 +57,6 @@ libinput/game->>eventX: open /dev/input/eventX
 
 `vuinputd` forwards udev events into the container via netlink, because otherwise the game in the container would not recognize when its net namespace is different from the one of udevd.
 
-The external visible state is determined by actions originating from the following locations (WIP):
-1) userspace
-1.1) ioctl UI_DEV_CREATE to open file handle of `/dev/uinput`
-2) the linux kernel (device creation)
-2.1)  uinput_create_device [uinput.c](https://github.com/torvalds/linux/blob/master/drivers/input/misc/uinput.c)
-2.2) input_register_device [input.c](https://github.com/torvalds/linux/blob/master/drivers/input/input.c)
-2.3) device_add in [core.c](https://github.com/torvalds/linux/blob/master/drivers/base/core.c)
-2.3.1) device_create_file in [core.c](https://github.com/torvalds/linux/blob/master/drivers/base/core.c): create sysfs attribute file for device.
-2.3.2) create diverse symlinks and data for the sysfs entry
-2.3.3) kobject_uevent in [kobject_uevent](https://github.com/torvalds/linux/blob/master/lib/kobject_uevent.c) notify user space via netlink with `DEVPATH` set to the sysfs entry under `/sys`, e.g., `/devices/virtual/input/input97`
-3) udev in userspace
-- udev_event_execute_rules in [udev-event.c](https://github.com/systemd/systemd/blob/main/src/udev/udev-event.c#)
-
-
-Example of kernel messages that were send via netlink
-
-```
-KERNEL[1674737.476205] add      /devices/virtual/input/input155 (input)
-ACTION=add
-DEVPATH=/devices/virtual/input/input155
-SUBSYSTEM=input
-PRODUCT=3/beef/dead/0
-NAME="Example device"
-PROP=0
-EV=7
-KEY=10000 0 0 0 0
-REL=3
-MODALIAS=input:b0003vBEEFpDEADe0000-e0,1,2,k110,r0,1,amlsfw
-SEQNUM=18608
-
-KERNEL[1674737.476270] add      /devices/virtual/input/input155/mouse2 (input)
-ACTION=add
-DEVPATH=/devices/virtual/input/input155/mouse2
-SUBSYSTEM=input
-DEVNAME=/dev/input/mouse2
-SEQNUM=18609
-MAJOR=13
-MINOR=34
-
-KERNEL[1674737.476328] add      /devices/virtual/input/input155/event12 (input)
-ACTION=add
-DEVPATH=/devices/virtual/input/input155/event12
-SUBSYSTEM=input
-DEVNAME=/dev/input/event12
-SEQNUM=18610
-MAJOR=13
-MINOR=76
-```
-
-Example of udev (after adding the hwdb and rules entries)
-```
-UDEV  [1674737.478882] add      /devices/virtual/input/input155 (input)
-ACTION=add
-DEVPATH=/devices/virtual/input/input155
-SUBSYSTEM=input
-PRODUCT=3/beef/dead/0
-NAME="Example device"
-PROP=0
-EV=7
-KEY=10000 0 0 0 0
-REL=3
-MODALIAS=input:b0003vBEEFpDEADe0000-e0,1,2,k110,r0,1,amlsfw
-SEQNUM=18608
-USEC_INITIALIZED=1674737476194
-ID_VUINPUT=1
-ID_INPUT=1
-.INPUT_CLASS=mouse
-ID_SERIAL=noserial
-ID_VUINPUT_MOUSE=1
-ID_SEAT=seat_vuinput
-TAGS=:seat:
-CURRENT_TAGS=:seat:
-
-UDEV  [1674737.480016] add      /devices/virtual/input/input155/mouse2 (input)
-ACTION=add
-DEVPATH=/devices/virtual/input/input155/mouse2
-SUBSYSTEM=input
-DEVNAME=/dev/input/mouse2
-SEQNUM=18609
-USEC_INITIALIZED=1674737477357
-ID_INPUT=1
-ID_INPUT_MOUSE=1
-.INPUT_CLASS=mouse
-ID_SERIAL=noserial
-ID_SEAT=seat_vuinput
-MAJOR=13
-MINOR=34
-TAGS=:seat_vuinput:
-CURRENT_TAGS=:seat_vuinput:
-
-UDEV  [1674737.498627] add      /devices/virtual/input/input155/event12 (input)
-ACTION=add
-DEVPATH=/devices/virtual/input/input155/event12
-SUBSYSTEM=input
-DEVNAME=/dev/input/event12
-SEQNUM=18610
-USEC_INITIALIZED=1674737477373
-ID_VUINPUT=1
-.HAVE_HWDB_PROPERTIES=1
-ID_INPUT=1
-.INPUT_CLASS=mouse
-ID_SERIAL=noserial
-ID_SEAT=seat_vuinput
-ID_VUINPUT_MOUSE=1
-MAJOR=13
-MINOR=76
-TAGS=:seat_vuinput:
-CURRENT_TAGS=:seat_vuinput:
-```
 
 ---
 
@@ -532,10 +423,109 @@ While this design is necessary for mediation, it introduces potential attack sur
 * [ ] Eventually migrate to **Rust-native FUSE/Netlink** bindings to remove unsafe dependencies.
 
 
+## 5. Background: How are input devices created by the kernel using uinput
 
-## 5. Alternative Approaches
+We need to know in which order device nodes and netlink messages are sent by the linux infrastructure when uinput is used directly to correctly replicate the behavior. This is what this section is about. The external visible state is determined by actions originating from the following locations:
+1) userspace:  
+application uses ioctl UI_DEV_CREATE on an open file handle of `/dev/uinput`
+2) the linux kernel (device creation):
+PART 1) Registering the uinput device. 
+Entry point is uinput_ioctl_handler in [uinput.c](https://github.com/torvalds/linux/blob/master/drivers/input/misc/uinput.c)
+2.1)  uinput_create_device in [uinput.c](https://github.com/torvalds/linux/blob/master/drivers/input/misc/uinput.c)
+2.1.1) input_register_device in [input.c](https://github.com/torvalds/linux/blob/master/drivers/input/input.c)
+2.1.1.1) device_add in [core.c](https://github.com/torvalds/linux/blob/master/drivers/base/core.c)
+2.1.1.1.1) device_create_file in [core.c](https://github.com/torvalds/linux/blob/master/drivers/base/core.c): create sysfs attribute file for device.
+2.1.1.1.2) create diverse symlinks and data for the sysfs entry
+2.1.1.1.3) create node via devtmpfs
+2.1.1.1.3.1) devtmpfs_create_node [devtmpfs.c](https://github.com/torvalds/linux/blob/master/drivers/base/devtmpfs.c)
+2.1.1.1.4) kobject_uevent in [kobject_uevent](https://github.com/torvalds/linux/blob/master/lib/kobject_uevent.c) notify user space via netlink with `DEVPATH` set to the sysfs entry under `/sys`, e.g., `/devices/virtual/input/input97`
+2.1.1.2) input_attach_handler in [input.c](https://github.com/torvalds/linux/blob/master/drivers/input/input.c)
+PART 2) Registering the evdev device.  
+Note that evdev_handler is registered as a input_handler during the initialization of evdev in [evdev.c](https://github.com/torvalds/linux/blob/master/drivers/input/evdev.c)
+2.1.1.2.1) evdev_connect in [evdev.c](https://github.com/torvalds/linux/blob/master/drivers/input/evdev.c)
+2.1.1.2.1.1) cdev_device_add in [char_dev.c](https://github.com/torvalds/linux/blob/master/fs/char_dev.c)
+2.1.1.2.1.1) device_add in [core.c](https://github.com/torvalds/linux/blob/master/drivers/base/core.c)
+2.1.1.2.1.1.1 - 2.1.1.2.1.1.4) Analogue to 2.1.1.1.1 - 2.1.1.1.4.
+3) udev in userspace
+- udev_event_execute_rules in [udev-event.c](https://github.com/systemd/systemd/blob/main/src/udev/udev-event.c#)
 
-### 5.1 trace accesses of /dev/uinput with eBPF
+
+
+Example of kernel messages that were send via netlink
+
+```
+KERNEL[1674737.476205] add      /devices/virtual/input/input155 (input)
+ACTION=add
+DEVPATH=/devices/virtual/input/input155
+SUBSYSTEM=input
+PRODUCT=3/beef/dead/0
+NAME="Example device"
+PROP=0
+EV=7
+KEY=10000 0 0 0 0
+REL=3
+MODALIAS=input:b0003vBEEFpDEADe0000-e0,1,2,k110,r0,1,amlsfw
+SEQNUM=18608
+
+KERNEL[1674737.476328] add      /devices/virtual/input/input155/event12 (input)
+ACTION=add
+DEVPATH=/devices/virtual/input/input155/event12
+SUBSYSTEM=input
+DEVNAME=/dev/input/event12
+SEQNUM=18610
+MAJOR=13
+MINOR=76
+```
+
+Example of udev (after adding the hwdb and rules entries)
+```
+UDEV  [1674737.478882] add      /devices/virtual/input/input155 (input)
+ACTION=add
+DEVPATH=/devices/virtual/input/input155
+SUBSYSTEM=input
+PRODUCT=3/beef/dead/0
+NAME="Example device"
+PROP=0
+EV=7
+KEY=10000 0 0 0 0
+REL=3
+MODALIAS=input:b0003vBEEFpDEADe0000-e0,1,2,k110,r0,1,amlsfw
+SEQNUM=18608
+USEC_INITIALIZED=1674737476194
+ID_VUINPUT=1
+ID_INPUT=1
+.INPUT_CLASS=mouse
+ID_SERIAL=noserial
+ID_VUINPUT_MOUSE=1
+ID_SEAT=seat_vuinput
+TAGS=:seat:
+CURRENT_TAGS=:seat:
+
+
+UDEV  [1674737.498627] add      /devices/virtual/input/input155/event12 (input)
+ACTION=add
+DEVPATH=/devices/virtual/input/input155/event12
+SUBSYSTEM=input
+DEVNAME=/dev/input/event12
+SEQNUM=18610
+USEC_INITIALIZED=1674737477373
+ID_VUINPUT=1
+.HAVE_HWDB_PROPERTIES=1
+ID_INPUT=1
+.INPUT_CLASS=mouse
+ID_SERIAL=noserial
+ID_SEAT=seat_vuinput
+ID_VUINPUT_MOUSE=1
+MAJOR=13
+MINOR=76
+TAGS=:seat_vuinput:
+CURRENT_TAGS=:seat_vuinput:
+```
+
+
+## 6. Alternative Approaches
+
+### 6.1 trace accesses of /dev/uinput with eBPF
 
 **Idea (short):** attach an eBPF program to the syscall tracepoint for `ioctl` (`tracepoint/syscalls/sys_enter_ioctl`), filter by container cgroup, and send small events (pid, tgid, fd, cmd, timestamp, short payload sample) to userspace using the BPF ring buffer. A privileged host agent consumes the ringbuf events, duplicates the target FD via `pidfd_getfd()` and proceeds with UI_GET_SYSNAME / sysfs resolution to retrieve the sys-path and the dev-path. Having the dev-path and the pid of the container, the solution could proceed as in the current solution.
 
@@ -559,7 +549,7 @@ Inside the trace program you will typically use:
 The **`pidfd_getfd()`** syscall (introduced in Linux 5.6, see `man pidfd_getfd(2)`) allows one process to **duplicate a file descriptor from another process** into its own FD table. It takes a *pidfd* (obtained via `pidfd_open()` or from `CLONE_PIDFD`), the target FD number in the remote process, and optional flags. The resulting descriptor refers to the **same open file description**—sharing offset, status flags, and driver state—exactly as if the target process had called `dup()`. Permission checks apply: the caller must either share credentials (same UID) or hold `CAP_SYS_PTRACE` or an equivalent capability over the target. This makes `pidfd_getfd()` the canonical and race-free way to inspect or reuse another process’s device handles (for example, to run `UI_GET_SYSNAME` on a client apps' fd on `/dev/uinput` ) without invasive ptrace tricks.
 
 
-### 5.2 LD_PRELOAD
+### 6.2 LD_PRELOAD
 See src/fake-uinput/README.md on wolf
 
 https://github.com/games-on-whales/wolf/issues/81
