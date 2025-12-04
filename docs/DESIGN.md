@@ -425,29 +425,41 @@ While this design is necessary for mediation, it introduces potential attack sur
 
 ## 5. Background: How are input devices created by the kernel using uinput
 
-We need to know in which order device nodes and netlink messages are sent by the linux infrastructure when uinput is used directly to correctly replicate the behavior. This is what this section is about. The external visible state is determined by actions originating from the following locations:
+We need to know in which order device nodes and netlink messages are sent by the linux infrastructure when uinput is used directly in order to correctly replicate the behavior. This is what this section is about. The externally visible state is determined by actions originating from the following locations:
 1) userspace:  
 application uses ioctl UI_DEV_CREATE on an open file handle of `/dev/uinput`
 2) the linux kernel (device creation):
 PART 1) Registering the uinput device. 
-Entry point is uinput_ioctl_handler in [uinput.c](https://github.com/torvalds/linux/blob/master/drivers/input/misc/uinput.c)
-2.1)  uinput_create_device in [uinput.c](https://github.com/torvalds/linux/blob/master/drivers/input/misc/uinput.c)
-2.1.1) input_register_device in [input.c](https://github.com/torvalds/linux/blob/master/drivers/input/input.c)
-2.1.1.1) device_add in [core.c](https://github.com/torvalds/linux/blob/master/drivers/base/core.c)
-2.1.1.1.1) device_create_file in [core.c](https://github.com/torvalds/linux/blob/master/drivers/base/core.c): create sysfs attribute file for device.
+Entry point is uinput_ioctl_handler() in [uinput.c](https://github.com/torvalds/linux/blob/master/drivers/input/misc/uinput.c)
+2.1)  uinput_create_device() in [uinput.c](https://github.com/torvalds/linux/blob/master/drivers/input/misc/uinput.c)
+2.1.1) input_register_device() in [input.c](https://github.com/torvalds/linux/blob/master/drivers/input/input.c)
+2.1.1.1) device_add() in [core.c](https://github.com/torvalds/linux/blob/master/drivers/base/core.c)
+2.1.1.1.1) device_create_file() in [core.c](https://github.com/torvalds/linux/blob/master/drivers/base/core.c): create the sysfs attribute file for the device.
 2.1.1.1.2) create diverse symlinks and data for the sysfs entry
-2.1.1.1.3) create node via devtmpfs
-2.1.1.1.3.1) devtmpfs_create_node [devtmpfs.c](https://github.com/torvalds/linux/blob/master/drivers/base/devtmpfs.c)
-2.1.1.1.4) kobject_uevent in [kobject_uevent](https://github.com/torvalds/linux/blob/master/lib/kobject_uevent.c) notify user space via netlink with `DEVPATH` set to the sysfs entry under `/sys`, e.g., `/devices/virtual/input/input97`
-2.1.1.2) input_attach_handler in [input.c](https://github.com/torvalds/linux/blob/master/drivers/input/input.c)
+2.1.1.1.3) create node via devtmpfs is skipped, because there is no node for a uinput device
+2.1.1.1.4) kobject_uevent() in [kobject_uevent](https://github.com/torvalds/linux/blob/master/lib/kobject_uevent.c) notifies user space via netlink with `DEVPATH` set to the sysfs entry under `/sys`, e.g., `/devices/virtual/input/input155`
+2.1.1.2) input_attach_handler() in [input.c](https://github.com/torvalds/linux/blob/master/drivers/input/input.c)
 PART 2) Registering the evdev device.  
-Note that evdev_handler is registered as a input_handler during the initialization of evdev in [evdev.c](https://github.com/torvalds/linux/blob/master/drivers/input/evdev.c)
-2.1.1.2.1) evdev_connect in [evdev.c](https://github.com/torvalds/linux/blob/master/drivers/input/evdev.c)
-2.1.1.2.1.1) cdev_device_add in [char_dev.c](https://github.com/torvalds/linux/blob/master/fs/char_dev.c)
-2.1.1.2.1.1) device_add in [core.c](https://github.com/torvalds/linux/blob/master/drivers/base/core.c)
-2.1.1.2.1.1.1 - 2.1.1.2.1.1.4) Analogue to 2.1.1.1.1 - 2.1.1.1.4.
-3) udev in userspace
-- udev_event_execute_rules in [udev-event.c](https://github.com/systemd/systemd/blob/main/src/udev/udev-event.c#)
+Note that evdev_handler is registered as an input_handler during the initialization of evdev in [evdev.c](https://github.com/torvalds/linux/blob/master/drivers/input/evdev.c)
+2.1.1.2.1) evdev_connect() in [evdev.c](https://github.com/torvalds/linux/blob/master/drivers/input/evdev.c)
+2.1.1.2.1.1) cdev_device_add() in [char_dev.c](https://github.com/torvalds/linux/blob/master/fs/char_dev.c)
+2.1.1.2.1.1.1) device_add() in [core.c](https://github.com/torvalds/linux/blob/master/drivers/base/core.c)
+2.1.1.2.1.1.1.1) device_create_file() in [core.c](https://github.com/torvalds/linux/blob/master/drivers/base/core.c): creates the sysfs attribute file for the device.
+2.1.1.2.1.1.1.2) create diverse symlinks and data for the sysfs entry
+2.1.1.2.1.1.1.3) create node via devtmpfs
+2.1.1.2.1.1.1.3.1) devtmpfs_create_node() in [devtmpfs.c](https://github.com/torvalds/linux/blob/master/drivers/base/devtmpfs.c) creates `/dev/input/eventY`. name is determined by input_devnode in [input.c](https://github.com/torvalds/linux/blob/master/drivers/input/input.c) which was set via dev_set_name in [evdev.c](https://github.com/torvalds/linux/blob/master/drivers/input/evdev.c)
+2.1.1.2.1.1.1.4) kobject_uevent() in [kobject_uevent.c](https://github.com/torvalds/linux/blob/master/lib/kobject_uevent.c) notify user space via netlink with `DEVPATH` set to the sysfs entry under `/sys`, e.g., `/devices/virtual/input/input155/event12`
+3) udev in userspace (TODO)
+- udev_event_execute_rules() in [udev-event.c](https://github.com/systemd/systemd/blob/main/src/udev/udev-event.c#)
+
+
+The uinput device created by PART 1 is only exposed through sysfs, still represented by struct device, but does not correspond to a char device node. The evdev device created by PART 2 is exposed through sysfs and has also a major and a minor. Thus, the order is:
+1) open uinput
+2) create devices/virtual/input/inputX
+3) netlink KERNEL DEVPATH=/devices/virtual/input/inputX
+4) create /sys/devices/virtual/input/inputX/eventY
+5) create /dev/input/eventY
+6) netlink KERNEL DEVPATH=/devices/virtual/input/inputX/eventY
 
 
 
@@ -500,7 +512,6 @@ ID_VUINPUT_MOUSE=1
 ID_SEAT=seat_vuinput
 TAGS=:seat:
 CURRENT_TAGS=:seat:
-
 
 UDEV  [1674737.498627] add      /devices/virtual/input/input155/event12 (input)
 ACTION=add
