@@ -1,3 +1,32 @@
+vuinputd (0.2.0-1) unstable; urgency=medium
+
+  * Register official USB vendor/product ID (VID 0x1209, PID 0x5020) under
+    pid.codes.
+  * Improve and expand project documentation:
+    - Extended DESIGN.md with device creation details, uinput flow, and
+      netlink/uinput interactions.
+    - Added new testing documentation and documented conducted tests.
+    - Updated USAGE.md with screenshots and clarified steps.
+    - Multiple README.md improvements and cleanup.
+  * Add initial .deb packaging support and GitHub Actions workflow for CI.
+  * Implement device reuse and first support for legacy devices (Steam
+    compatibility).
+  * Improve Steam Deck gamepad behavior and compat-mode fixes.
+  * Enhance reliability:
+    - Fix zombie process issue.
+    - Deduplicate excessive error messages.
+    - Ensure write to uinput only with complete messages.
+    - Fix get_awaiter_for_state and pointer cleanup issues.
+    - Remove hardcoded wait to improve timing stability.
+  * Add detection for 32-bit calling processes.
+  * Ensure arm64 compilation support.
+  * Various refactorings, typo fixes, and internal improvements to job engine
+    and service file.
+  * Updated documentation for release readiness.
+
+ -- Johannes Leupolz <vinput@leupolz.eu>  Thu, 06 Dec 2025 21:00:00 +0000
+
+
 vuinputd (0.1.0-1) unstable; urgency=medium
 
   * Initial release.
