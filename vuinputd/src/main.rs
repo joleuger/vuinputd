@@ -254,8 +254,9 @@ unsafe extern "C" fn vuinput_write(
 
         let mut usetup: uinput_setup = unsafe { std::mem::zeroed() };
         usetup.id.bustype = BUS_USB;
-        usetup.id.vendor = 0xbeef;
-        usetup.id.product = 0xdead;
+        // The pid is registered for vuinputd, see https://pid.codes/1209/5020/
+        usetup.id.vendor = 0x1209;
+        usetup.id.product = 0x5020;
         usetup.id.version = (*legacy_uinput_user_dev).id.version;
         usetup.ff_effects_max=(*legacy_uinput_user_dev).ff_effects_max;
         usetup.name=(*legacy_uinput_user_dev).name;
@@ -556,8 +557,9 @@ unsafe extern "C" fn vuinput_ioctl(
                 (*setup_ptr).id.vendor
             );
             // replace vendor and product id to the values from sunshine (see inputtino_common.h of sunshine)
-            (*setup_ptr).id.product = 0xdead;
-            (*setup_ptr).id.vendor = 0xbeef;
+            // The pid is registered for vuinputd, see https://pid.codes/1209/5020/
+            (*setup_ptr).id.product = 0x5020;
+            (*setup_ptr).id.vendor = 0x1209;
             ui_dev_setup(fd, setup_ptr).unwrap();
             fuse_lowlevel::fuse_reply_ioctl(_req, 0, std::ptr::null(), 0);
         }

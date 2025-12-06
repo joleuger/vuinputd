@@ -1,9 +1,10 @@
 # ===========================================================
-# Custom HWDB entry for BEEF:DEAD virtual devices
+# Custom HWDB entry for 1209:5020 virtual devices
 # -----------------------------------------------------------
 # Purpose:
 #   This entry targets the virtual devices created via uinput
-#   with vendor_id=0xBEEF and product_id=0xDEAD.
+#   with vendor_id=0x1209 and product_id=0x5020 of bus type USB (0x0003).
+#   The pid is registered for vuinputd, see https://pid.codes/1209/5020/.
 #
 # Why HWDB is used:
 #   - uinput devices are virtual, so ATTRS{idVendor} / ATTRS{idProduct}
@@ -25,8 +26,8 @@
 #   1. sudo systemd-hwdb update
 # ===========================================================
 
-evdev:input:b0003vBEEFpDEADe0000-*
+evdev:input:b0003v1209p5020e????-*
  ID_VUINPUT=1
 
-input:b0003vBEEFpDEADe0000-*
+input:b0003v1209p5020e????-*
  ID_VUINPUT=1

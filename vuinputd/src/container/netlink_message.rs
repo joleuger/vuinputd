@@ -6,7 +6,7 @@ use std::collections::HashMap;
 use std::mem;
 use std::os::fd::{AsRawFd, OwnedFd};
 
-use std::io::{Cursor, IoSlice};
+use std::io::{IoSlice};
 
 use log::debug;
 use nix::sys::socket::{
@@ -174,12 +174,12 @@ UDEV  [16427452.069342] add      /devices/virtual/input/input97 (input)
 ACTION=add
 DEVPATH=/devices/virtual/input/input97
 SUBSYSTEM=input
-PRODUCT=3/beef/dead/0
+PRODUCT=3/1209/5020/0
 NAME="Example device"
 PROP=0
 EV=3
 KEY=ffffffefffff fffffffffffffffe
-MODALIAS=input:b0003vBEEFpDEADe0000-e0,1,kramlsfw
+MODALIAS=input:b0003v1209p5020e0000-e0,1,kramlsfw
 SEQNUM=14498
 USEC_INITIALIZED=16427452066918
 ID_VUINPUT_KEYBOARD=1

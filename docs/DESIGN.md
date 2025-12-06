@@ -396,6 +396,19 @@ When mapping 32-bit compat input_event formats into 64-bit representation, copy 
 **Single-threaded CUSE in foreground mode**
 
 No high volume of events expected where we could benefit from multiple threads. But much of the code is already prepared for multithreading, if there is really demand.
+
+---
+
+## 3.9 Overriding the type, vendor id, and product id
+
+During the creation of the device, the type, vendor id, and product id will be 
+- type: BUS_USB 0x3
+- vendor id: 0x1209,
+- product id: 0x5020.
+
+BUS_VIRTUAL 0x6 is not used, because I couldn't find a place where I could register a vendor and product id. The now used combination is unique, as the product id is registered under [pid.codes](https://pid.codes/1209/5020/). So, there is no problem to use it in a system-wide hwdb-file for udev.
+
+
 ---
 
 ## 4. Security Considerations
