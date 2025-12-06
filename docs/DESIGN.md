@@ -447,7 +447,7 @@ Note that evdev_handler is registered as an input_handler during the initializat
 2.1.1.2.1.1.1.1) device_create_file() in [core.c](https://github.com/torvalds/linux/blob/master/drivers/base/core.c): creates the sysfs attribute file for the device.
 2.1.1.2.1.1.1.2) create diverse symlinks and data for the sysfs entry
 2.1.1.2.1.1.1.3) create node via devtmpfs
-2.1.1.2.1.1.1.3.1) devtmpfs_create_node() in [devtmpfs.c](https://github.com/torvalds/linux/blob/master/drivers/base/devtmpfs.c) creates `/dev/input/eventY`. name is determined by input_devnode in [input.c](https://github.com/torvalds/linux/blob/master/drivers/input/input.c) which was set via dev_set_name in [evdev.c](https://github.com/torvalds/linux/blob/master/drivers/input/evdev.c)
+2.1.1.2.1.1.1.3.1) devtmpfs_create_node() in [devtmpfs.c](https://github.com/torvalds/linux/blob/master/drivers/base/devtmpfs.c) creates `/dev/input/eventY`. name is determined by input_devnode() in [input.c](https://github.com/torvalds/linux/blob/master/drivers/input/input.c) which was set via dev_set_name in [evdev.c](https://github.com/torvalds/linux/blob/master/drivers/input/evdev.c)
 2.1.1.2.1.1.1.4) kobject_uevent() in [kobject_uevent.c](https://github.com/torvalds/linux/blob/master/lib/kobject_uevent.c) notify user space via netlink with `DEVPATH` set to the sysfs entry under `/sys`, e.g., `/devices/virtual/input/input155/event12`
 3) udev in userspace (TODO)
 - udev_event_execute_rules() in [udev-event.c](https://github.com/systemd/systemd/blob/main/src/udev/udev-event.c#)
@@ -533,6 +533,39 @@ TAGS=:seat_vuinput:
 CURRENT_TAGS=:seat_vuinput:
 ```
 
+From my investigation, the ioctl thread immediately sees /dev/input/eventX, because:
+- UI_DEV_CREATE runs device_add()
+- device_add() calls devtmpfs_create_node()
+- devtmpfs_create_node() directly creates the node in VFS and waits via a wait_for_completion().
+- The kernel returns from those calls only after the node is fully present in the dcache and directory.
+
+### 5.2 CUSE
+
+### 5.3 uinput users
+
+#### 5.3.1 inputtino
+
+https://github.com/games-on-whales/inputtino
+
+Library used by wolf and sunshine
+
+#### 5.3.2 Steam
+
+https://github.com/games-on-whales/inputtino
+
+Library used by wolf and sunshine
+
+### 5.4 Applications that use the created devices
+
+#### 5.4.1 SDL
+
+https://github.com/libsdl-org/SDL/blob/main/src/joystick/linux/SDL_sysjoystick.c
+
+#### 5.4.2 libudev and netlink
+
+#### 5.4.3 libinput
+
+#### 5.4.4. Proton
 
 ## 6. Alternative Approaches
 
