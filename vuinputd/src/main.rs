@@ -363,7 +363,7 @@ unsafe extern "C" fn vuinput_release(
     );
     drop(vuinput_state_mutex); // this also closes the file when no other references are open
     // TODO: maybe also ensure that nothing is left in the containers
-    fuse_lowlevel::fuse_reply_err(_req, 0);
+    fuse_lowlevel::fuse_reply_none(_req);
 }
 
 unsafe extern "C" fn vuinput_ioctl(
