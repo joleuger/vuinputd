@@ -564,9 +564,11 @@ Library used by wolf and sunshine
 
 #### 5.3.2 Steam
 
-https://github.com/games-on-whales/inputtino
-
-Library used by wolf and sunshine
+https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/blob/main/steam-runtime-tools/input-device.c
+https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/blob/main/docs/container-runtime.md
+https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/blob/main/docs/ld-library-path-runtime.md
+https://github.com/ValveSoftware/steam-for-linux/issues/10175
+https://github.com/ValveSoftware/steam-for-linux/issues/8042
 
 ### 5.4 Applications that use the created devices
 
@@ -574,15 +576,37 @@ Library used by wolf and sunshine
 
 https://github.com/libsdl-org/SDL/blob/main/src/joystick/linux/SDL_sysjoystick.c
 
+https://github.com/libsdl-org/SDL/blob/main/src/joystick/SDL_joystick.c
+
 #### 5.4.2 libudev and netlink
 
-#### 5.4.3 libinput
+https://github.com/systemd/systemd/tree/main/src/libudev
+
+https://insujang.github.io/2018-11-27/udev-device-manager-for-the-linux-kernel-in-userspace/
+
+https://games-on-whales.github.io/wolf/stable/dev/fake-udev.html
+
+https://github.com/JohnCMcDonough/virtual-gamepad
+
+#### 5.4.3 libinput, libevdev
+
+https://gitlab.freedesktop.org/libinput/libinput/-/tree/main/src?ref_type=heads
+
+https://gitlab.freedesktop.org/libevdev/libevdev/-/blob/master/libevdev/libevdev-uinput.c?ref_type=heads
 
 #### 5.4.4. Proton
 
-## 6. Alternative Approaches
+https://github.com/GloriousEggroll/proton-ge-custom/blob/master/docs/CONTROLLERS.md
 
-### 6.1 trace accesses of /dev/uinput with eBPF
+## 6. HIDAPI
+
+https://github.com/libusb/hidapi
+
+https://abeltra.me/blog/inputtino-uhid-1/
+
+## 7. Alternative Approaches
+
+### 7.1 trace accesses of /dev/uinput with eBPF
 
 **Idea (short):** attach an eBPF program to the syscall tracepoint for `ioctl` (`tracepoint/syscalls/sys_enter_ioctl`), filter by container cgroup, and send small events (pid, tgid, fd, cmd, timestamp, short payload sample) to userspace using the BPF ring buffer. A privileged host agent consumes the ringbuf events, duplicates the target FD via `pidfd_getfd()` and proceeds with UI_GET_SYSNAME / sysfs resolution to retrieve the sys-path and the dev-path. Having the dev-path and the pid of the container, the solution could proceed as in the current solution.
 
@@ -606,7 +630,7 @@ Inside the trace program you will typically use:
 The **`pidfd_getfd()`** syscall (introduced in Linux 5.6, see `man pidfd_getfd(2)`) allows one process to **duplicate a file descriptor from another process** into its own FD table. It takes a *pidfd* (obtained via `pidfd_open()` or from `CLONE_PIDFD`), the target FD number in the remote process, and optional flags. The resulting descriptor refers to the **same open file description**—sharing offset, status flags, and driver state—exactly as if the target process had called `dup()`. Permission checks apply: the caller must either share credentials (same UID) or hold `CAP_SYS_PTRACE` or an equivalent capability over the target. This makes `pidfd_getfd()` the canonical and race-free way to inspect or reuse another process’s device handles (for example, to run `UI_GET_SYSNAME` on a client apps' fd on `/dev/uinput` ) without invasive ptrace tricks.
 
 
-### 6.2 LD_PRELOAD
+### 7.2 LD_PRELOAD
 See src/fake-uinput/README.md on wolf
 
 https://github.com/games-on-whales/wolf/issues/81
@@ -614,3 +638,12 @@ https://github.com/games-on-whales/wolf/issues/81
 https://github.com/games-on-whales/wolf/pull/88
 
 https://github.com/zerofltexx/wolf/commit/5b3282ceef6373c5afd2a860365c886fa942f59c#diff-2446d8f27f6ac4efff38510458548cea92179eddf38c187f5ad90d6bdd4b3d69
+
+
+### 7.3 Custom kernel modul
+
+https://github.com/dkms-project/dkms
+
+https://github.com/torvalds/linux/blob/master/drivers/input/misc/uinput.c
+
+https://lore.kernel.org/linux-bluetooth/20191201145357.ybq5gfty4ulnfasq@pali/t/#u
