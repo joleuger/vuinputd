@@ -363,7 +363,9 @@ unsafe extern "C" fn vuinput_release(
     );
     drop(vuinput_state_mutex); // this also closes the file when no other references are open
     // TODO: maybe also ensure that nothing is left in the containers
-    fuse_lowlevel::fuse_reply_none(_req);
+
+    // This _must_ be fuse_reply_err. fuse_reply_none would lead to a deadlock of the uinput user.
+    fuse_lowlevel::fuse_reply_err(_req, 0);
 }
 
 unsafe extern "C" fn vuinput_ioctl(
