@@ -37,16 +37,18 @@ use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use uinput_ioctls::*;
 
-pub mod requesting_process;
 pub mod compat;
+
 use crate::compat::input_event_compat;
 use crate::jobs::inject_in_container_job::InjectInContainerJob;
 use crate::jobs::monitor_udev_job::MonitorBackgroundLoop;
 use crate::jobs::remove_from_container_job::RemoveFromContainerJob;
-use crate::requesting_process::*;
+
+pub mod process_tools;
 
 pub mod job_engine;
 use crate::job_engine::job::*;
+use crate::process_tools::*;
 
 pub mod jobs;
 

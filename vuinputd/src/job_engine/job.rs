@@ -11,7 +11,7 @@ use std::sync::Mutex;
 use std::thread::{self, JoinHandle};
 use std::{collections::HashMap, future::Future, pin::Pin, sync::Arc};
 
-use crate::requesting_process::RequestingProcess;
+use crate::process_tools::RequestingProcess;
 
 // To discuss:
 // what we handle here, could also be named Task. The decision for job was more or less
