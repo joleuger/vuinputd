@@ -9,11 +9,14 @@ use nix::{
     unistd::{fork, ForkResult},
 };
 use std::{
-    fs::{self, File}, io::Read, os::fd::{AsFd, FromRawFd, OwnedFd, RawFd}, path::{self, Path}, process, thread, time::Duration
+    fs::{self, File}, io::Read, os::fd::{AsFd, FromRawFd, OwnedFd, RawFd}, path::{self, Path}, process, sync::OnceLock, thread, time::Duration
 };
 
 use std::io::{self, BufRead};
 use std::path::PathBuf;
+
+pub static SELF_NAMESPACES: OnceLock<Namespaces>= OnceLock::new();
+
 
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
@@ -310,4 +313,17 @@ pub async fn await_process(pid: Pid) -> io::Result<i32> {
             unreachable!();
         },
     }
+}
+
+
+pub fn check_permissions() -> Result<(), std::io::Error> {
+    let path = Path::new("/proc/self/status");
+    debug!("Capabilities of vuinputd process:");
+    fs::read_to_string(path).
+        and_then(|status_file| {
+            status_file.lines()
+                        .filter(|line| line.starts_with("Cap"))
+                        .for_each(move |x| debug!("{}",x));
+            Ok(())
+        })
 }

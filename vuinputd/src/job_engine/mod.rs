@@ -31,8 +31,14 @@
 //!         | loop()  |  | loop() |      | loop() |
 //!         +---------+  +--------+      +--------+
 
+use std::sync::{Mutex, OnceLock};
+
+use crate::job_engine::job::Dispatcher;
+
 pub mod closure_job;
 pub mod job;
+
+pub static JOB_DISPATCHER: OnceLock<Mutex<Dispatcher>>= OnceLock::new();
 
 #[cfg(test)]
 mod tests;
