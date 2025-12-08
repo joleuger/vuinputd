@@ -570,6 +570,11 @@ https://gitlab.steamos.cloud/steamrt/steam-runtime-tools/-/blob/main/docs/ld-lib
 https://github.com/ValveSoftware/steam-for-linux/issues/10175
 https://github.com/ValveSoftware/steam-for-linux/issues/8042
 
+#### 5.3.3 Selkies Project
+
+Absolutely untested.
+https://github.com/selkies-project/selkies/pull/173
+
 ### 5.4 Applications that use the created devices
 
 #### 5.4.1 SDL
@@ -597,6 +602,10 @@ https://gitlab.freedesktop.org/libevdev/libevdev/-/blob/master/libevdev/libevdev
 #### 5.4.4. Proton
 
 https://github.com/GloriousEggroll/proton-ge-custom/blob/master/docs/CONTROLLERS.md
+
+wine control
+
+https://github.com/flatpak/xdg-desktop-portal/issues/536
 
 ## 6. HIDAPI
 

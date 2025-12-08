@@ -1,5 +1,7 @@
-use crate::jobs::closure_job::ClosureJob;
-use crate::jobs::job::{Dispatcher, Job, JobTarget};
+
+
+use crate::job_engine::closure_job::ClosureJob;
+use crate::job_engine::job::{Dispatcher, JobTarget};
 
 use super::*;
 use futures::executor::LocalPool;
@@ -49,6 +51,7 @@ fn test_job_ordering() {
         }),
     )));
 
+    dispatcher.close();
     dispatcher.wait_until_finished();
 
     assert_eq!(*c.lock().unwrap(), 6);

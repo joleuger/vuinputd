@@ -38,18 +38,17 @@ use std::sync::{Arc, Mutex, OnceLock, RwLock};
 use uinput_ioctls::*;
 
 pub mod requesting_process;
-pub mod monitor_udev;
 pub mod compat;
 use crate::compat::input_event_compat;
-use crate::container::inject_in_container_job::InjectInContainerJob;
-use crate::container::remove_from_container_job::RemoveFromContainerJob;
-use crate::monitor_udev::MonitorBackgroundLoop;
+use crate::jobs::inject_in_container_job::InjectInContainerJob;
+use crate::jobs::monitor_udev_job::MonitorBackgroundLoop;
+use crate::jobs::remove_from_container_job::RemoveFromContainerJob;
 use crate::requesting_process::*;
 
-pub mod jobs;
-use crate::jobs::job::*;
+pub mod job_engine;
+use crate::job_engine::job::*;
 
-pub mod container;
+pub mod jobs;
 
 
 #[derive(Debug)]
@@ -351,7 +350,7 @@ unsafe extern "C" fn vuinput_release(
         let remove_job=RemoveFromContainerJob::new(vuinput_state.requesting_process.clone(),input_device.devnode.clone(),input_device.syspath.clone(),input_device.major,input_device.minor);
         let awaiter = remove_job.get_awaiter_for_state();
         JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(remove_job));
-        awaiter(&container::remove_from_container_job::State::Finished);
+        awaiter(&jobs::remove_from_container_job::State::Finished);
     }
 
     drop(vuinput_state);
@@ -364,7 +363,15 @@ unsafe extern "C" fn vuinput_release(
     drop(vuinput_state_mutex); // this also closes the file when no other references are open
     // TODO: maybe also ensure that nothing is left in the containers
 
-    // This _must_ be fuse_reply_err. fuse_reply_none would lead to a deadlock of the uinput user.
+    // Note: For CUSE, the kernel always issues RELEASE via fuse_sync_release(),
+    // which forces a *synchronous* request (fuse_simple_request()).
+    //
+    // That means the kernel thread blocks until userspace sends a reply header.
+    // Calling fuse_reply_none() would send no header at all, causing the kernel
+    // to wait forever and the caller to deadlock.
+    //
+    // Therefore we must always send a real reply for RELEASE.
+    // `fuse_reply_err(req, 0)` is enough to wake the kernel and is safe here.
     fuse_lowlevel::fuse_reply_err(_req, 0);
 }
 
@@ -522,7 +529,7 @@ unsafe extern "C" fn vuinput_ioctl(
                 let inject_job=InjectInContainerJob::new(vuinput_state.requesting_process.clone(),devnode.clone(),sysname.clone(),major,minor);
                 let awaiter = inject_job.get_awaiter_for_state();
                 JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(inject_job));
-                awaiter(&container::inject_in_container_job::State::Finished);
+                awaiter(&jobs::inject_in_container_job::State::Finished);
                 debug!("fh {}: injecting dev-nodes in container has been finished ", fh);
             }
 
@@ -542,7 +549,7 @@ unsafe extern "C" fn vuinput_ioctl(
                 let remove_job=RemoveFromContainerJob::new(vuinput_state.requesting_process.clone(),input_device.devnode.clone(),input_device.syspath.clone(),input_device.major,input_device.minor);
                 let awaiter = remove_job.get_awaiter_for_state();
                 JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(remove_job));
-                awaiter(&container::remove_from_container_job::State::Finished);
+                awaiter(&jobs::remove_from_container_job::State::Finished);
                 debug!("fh {}: removing dev-nodes from container has been finished ", fh);
             }
 

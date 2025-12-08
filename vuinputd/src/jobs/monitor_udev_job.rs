@@ -19,7 +19,7 @@ use libudev::Monitor;
 use log::debug;
 use regex::Regex;
 
-use crate::jobs::job::{Job, JobTarget};
+use crate::job_engine::job::{Job, JobTarget};
 
 // === Basic types ===
 

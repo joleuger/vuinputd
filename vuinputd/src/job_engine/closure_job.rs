@@ -5,7 +5,8 @@
 use std::future::Future;
 use std::pin::Pin;
 
-use crate::jobs::job::{Dispatcher, Job, JobTarget};
+use crate::job_engine::job::{Dispatcher, Job, JobTarget};
+
 
 pub struct ClosureJob {
     desc: String,
@@ -56,7 +57,7 @@ impl Job for ClosureJob {
 }
 
 /// Example usage
-#[allow(dead_code)]
+#[test]
 pub fn example() {
     let mut dispatcher = Dispatcher::new();
 
