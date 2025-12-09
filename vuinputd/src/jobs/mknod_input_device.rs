@@ -3,10 +3,9 @@
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
 use nix::sys::stat::{makedev, mknod, stat, Mode, SFlag};
-use nix::unistd::{chown, Gid, Uid};
 use std::error::Error;
 use std::fs;
-use std::os::unix::fs::{MetadataExt, PermissionsExt};
+use std::os::unix::fs::{PermissionsExt};
 use std::path::Path;
 
 pub fn ensure_input_device(dev_path: String, major: u64, minor: u64) -> Result<(), Box<dyn Error>> {

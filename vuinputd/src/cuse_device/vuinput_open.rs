@@ -3,24 +3,14 @@
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
 use std::sync::OnceLock;
-use libc::{O_CLOEXEC, input_id};
-use libc::{iovec, off_t, size_t, EBADRQC, EIO, ENOENT};
-use libc::{uinput_abs_setup, uinput_ff_erase, uinput_ff_upload, uinput_setup};
+use libc::{O_CLOEXEC};
+use libc::{ENOENT};
 use ::cuse_lowlevel::*;
-use log::{debug, error, info, trace};
-use std::collections::HashMap;
-use std::ffi::{CStr, CString};
-use std::{fs, ptr};
-use std::fs::{File, OpenOptions};
-use std::io::Write;
-use std::io::{self, ErrorKind};
-use std::os::fd::AsRawFd;
-use std::os::raw::{c_char, c_int, c_uint, c_void};
-use std::os::unix::fs::{FileTypeExt, MetadataExt, OpenOptionsExt};
+use log::{debug, error};
+use std::fs::{OpenOptions};
+use std::os::unix::fs::{OpenOptionsExt};
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, RwLock};
-use uinput_ioctls::*;
 
 use crate::process_tools::{Pid, get_requesting_process};
 use crate::cuse_device::*;

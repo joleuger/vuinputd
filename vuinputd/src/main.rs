@@ -17,33 +17,19 @@
 // naming: dev_path vs dev_node. I guess I mean the same.
 // Send warning, if udev monitor does not exist
 
-
-use libc::{O_CLOEXEC, input_id};
-use libc::{iovec, off_t, size_t, EBADRQC, EIO, ENOENT};
-use libc::{uinput_abs_setup, uinput_ff_erase, uinput_ff_upload, uinput_setup};
 use ::cuse_lowlevel::*;
-use log::{debug, error, info, trace};
+use log::info;
 use std::collections::HashMap;
-use std::ffi::{CStr, CString};
-use std::{fs, ptr};
-use std::fs::{File, OpenOptions};
-use std::io::Write;
-use std::io::{self, ErrorKind};
-use std::os::fd::AsRawFd;
-use std::os::raw::{c_char, c_int, c_uint, c_void};
-use std::os::unix::fs::{FileTypeExt, MetadataExt, OpenOptionsExt};
-use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, RwLock};
-use uinput_ioctls::*;
+use std::ffi::CString;
+use std::os::raw::{c_char};
+use std::sync::atomic::{AtomicU64};
+use std::sync::{Mutex, RwLock};
 
 pub mod cuse_device;
 
 use crate::cuse_device::vuinput_open::VUINPUT_COUNTER;
 use crate::cuse_device::{DEDUP_LAST_ERROR, VUINPUT_STATE, vuinput_make_cuse_ops};
-use crate::jobs::inject_in_container_job::InjectInContainerJob;
 use crate::jobs::monitor_udev_job::MonitorBackgroundLoop;
-use crate::jobs::remove_from_container_job::RemoveFromContainerJob;
 
 pub mod process_tools;
 

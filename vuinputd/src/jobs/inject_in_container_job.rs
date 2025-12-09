@@ -111,7 +111,7 @@ impl InjectInContainerJob {
             // wait a maximum of 5 seconds == 50 attempts
             Timer::after(Duration::from_millis(100)).await;
         } 
-        if (netlink_data.is_none() || runtime_data.is_none()) {
+        if netlink_data.is_none() || runtime_data.is_none() {
             if netlink_data.is_none() {
                 debug!("Give up reading netlink data");
             }

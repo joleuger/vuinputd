@@ -2,24 +2,9 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
-use libc::{O_CLOEXEC, input_id};
-use libc::{iovec, off_t, size_t, EBADRQC, EIO, ENOENT};
-use libc::{uinput_abs_setup, uinput_ff_erase, uinput_ff_upload, uinput_setup};
 use ::cuse_lowlevel::*;
-use log::{debug, error, info, trace};
-use std::collections::HashMap;
-use std::ffi::{CStr, CString};
-use std::{fs, ptr};
-use std::fs::{File, OpenOptions};
-use std::io::Write;
-use std::io::{self, ErrorKind};
-use std::os::fd::AsRawFd;
-use std::os::raw::{c_char, c_int, c_uint, c_void};
-use std::os::unix::fs::{FileTypeExt, MetadataExt, OpenOptionsExt};
-use std::path::Path;
-use std::sync::atomic::{AtomicU64, Ordering};
-use std::sync::{Arc, Mutex, OnceLock, RwLock};
-use uinput_ioctls::*;
+use log::{debug};
+use std::sync::{Arc};
 use crate::{cuse_device::*, jobs};
 use crate::job_engine::JOB_DISPATCHER;
 use crate::jobs::remove_from_container_job::RemoveFromContainerJob;

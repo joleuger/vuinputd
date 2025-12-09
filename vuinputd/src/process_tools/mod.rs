@@ -9,11 +9,10 @@ use nix::{
     unistd::{fork, ForkResult},
 };
 use std::{
-    fs::{self, File}, io::Read, os::fd::{AsFd, FromRawFd, OwnedFd, RawFd}, path::{self, Path}, process, sync::OnceLock, thread, time::Duration
+    fs::{self, File}, io::Read, os::fd::{AsFd, FromRawFd, OwnedFd, RawFd}, path::{Path}, process, sync::OnceLock
 };
 
-use std::io::{self, BufRead};
-use std::path::PathBuf;
+use std::io;
 
 pub static SELF_NAMESPACES: OnceLock<Namespaces>= OnceLock::new();
 

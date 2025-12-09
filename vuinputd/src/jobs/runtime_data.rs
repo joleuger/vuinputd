@@ -78,7 +78,6 @@ pub fn read_udev_data(major: u64, minor: u64) -> io::Result<String> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
 
     #[test]
     fn test_replacement_and_filter() {
