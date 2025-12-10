@@ -6,11 +6,11 @@ use std::collections::HashMap;
 use std::mem;
 use std::os::fd::{AsRawFd, OwnedFd};
 
-use std::io::{IoSlice};
+use std::io::IoSlice;
 
 use log::debug;
 use nix::sys::socket::{
-    bind, sendmsg, socket, AddressFamily, MsgFlags, NetlinkAddr, SockFlag, SockProtocol, SockType
+    bind, sendmsg, socket, AddressFamily, MsgFlags, NetlinkAddr, SockFlag, SockProtocol, SockType,
 };
 
 /// Netlink constants
@@ -79,7 +79,7 @@ pub fn string_hash32(s: &str) -> u32 {
     match s {
         "input" => 3248653424,
         "" => 0,
-        _ => panic!("uncovered use case")
+        _ => panic!("uncovered use case"),
     }
 }
 
@@ -95,12 +95,10 @@ fn open_netlink(groups: u32) -> Result<OwnedFd, String> {
     .map_err(|e| format!("Could not create netlink socket: {}", e))?;
 
     // pid 0 => the kernel takes care of assigning it.
-    let sockaddr=NetlinkAddr::new(0, groups);
-    let raw_fd= fd.as_raw_fd();
+    let sockaddr = NetlinkAddr::new(0, groups);
+    let raw_fd = fd.as_raw_fd();
 
-    bind(raw_fd, &sockaddr).map_err(|e| {
-        format!("Could not bind netlink socket: {}", e)
-    })?;
+    bind(raw_fd, &sockaddr).map_err(|e| format!("Could not bind netlink socket: {}", e))?;
 
     Ok(fd)
 }
@@ -128,16 +126,19 @@ pub fn send_udev_monitor_message(
     let fd = open_netlink(groups)?;
 
     // prepare iovecs
-    let iov = [
-        IoSlice::new(&header_bytes),
-        IoSlice::new(payload),
-    ];
+    let iov = [IoSlice::new(&header_bytes), IoSlice::new(payload)];
 
     // destination sockaddr (NULL nl_pid => kernel / multicast)
     let sockaddr = NetlinkAddr::new(0, groups);
 
-    let _rc = sendmsg(fd.as_raw_fd(), &iov, &[], MsgFlags::empty(), Some(&sockaddr))
-        .map_err(|e| format!("Could not send message: {}", e));
+    let _rc = sendmsg(
+        fd.as_raw_fd(),
+        &iov,
+        &[],
+        MsgFlags::empty(),
+        Some(&sockaddr),
+    )
+    .map_err(|e| format!("Could not send message: {}", e));
     debug!("udev message sent");
 
     // ensure cleanup
@@ -146,28 +147,26 @@ pub fn send_udev_monitor_message(
     Ok(())
 }
 
-pub fn send_udev_monitor_message_with_properties(properties:HashMap<String, String>) {
+pub fn send_udev_monitor_message_with_properties(properties: HashMap<String, String>) {
     let device_name = match properties.get("DEVNAME") {
         Some(name) => name,
-        None => "unknown device"
+        None => "unknown device",
     };
-    debug!("Sending udev message over netlink for {}",device_name);
-    let mut payload:Vec<u8> = Vec::new();
-    for (key,value) in properties.iter() {
+    debug!("Sending udev message over netlink for {}", device_name);
+    let mut payload: Vec<u8> = Vec::new();
+    for (key, value) in properties.iter() {
         payload.extend(key.as_bytes());
         payload.extend("=".as_bytes());
         payload.extend(value.as_bytes());
         payload.push(0);
     }
-    
-    send_udev_monitor_message(&payload,Some("input"),None,UDEV_EVENT_MODE).unwrap();
+
+    send_udev_monitor_message(&payload, Some("input"), None, UDEV_EVENT_MODE).unwrap();
 }
 
 // println!("{:02X?}", payload);
 // 746573743D76616C75650043555252454E545F544147533D3A736561745F7675696E7075743A00544147533D3A736561745F7675696E7075743A00444556504154483D2F646576696365732F7669727475616C2F696E7075742F696E7075743133382F6576656E74390049445F5655494E5055545F4D4F5553453D31004D494E4F523D37330049445F494E5055543D31002E494E5055545F434C4153533D6D6F757365005345514E554D3D3134393231002E484156455F485744425F50524F504552544945533D31004D414A4F523D313300414354494F4E3D6164640049445F53455249414C3D6E6F73657269616C004445564E414D453D2F6465762F696E7075742F6576656E743900555345435F494E495449414C495A45443D31373337373733353034373139320049445F5655494E5055543D310049445F534541543D736561745F7675696E7075740053554253595354454D3D696E70757400
 // dGVzdD12YWx1ZQBDVVJSRU5UX1RBR1M9OnNlYXRfdnVpbnB1dDoAVEFHUz06c2VhdF92dWlucHV0OgBERVZQQVRIPS9kZXZpY2VzL3ZpcnR1YWwvaW5wdXQvaW5wdXQxMzgvZXZlbnQ5AElEX1ZVSU5QVVRfTU9VU0U9MQBNSU5PUj03MwBJRF9JTlBVVD0xAC5JTlBVVF9DTEFTUz1tb3VzZQBTRVFOVU09MTQ5MjEALkhBVkVfSFdEQl9QUk9QRVJUSUVTPTEATUFKT1I9MTMAQUNUSU9OPWFkZABJRF9TRVJJQUw9bm9zZXJpYWwAREVWTkFNRT0vZGV2L2lucHV0L2V2ZW50OQBVU0VDX0lOSVRJQUxJWkVEPTE3Mzc3NzM1MDQ3MTkyAElEX1ZVSU5QVVQ9MQBJRF9TRUFUPXNlYXRfdnVpbnB1dABTVUJTWVNURU09aW5wdXQA
-
-
 
 /*
 UDEV  [16427452.069342] add      /devices/virtual/input/input97 (input)

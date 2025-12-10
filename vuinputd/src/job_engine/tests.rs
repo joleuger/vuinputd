@@ -1,5 +1,3 @@
-
-
 use crate::job_engine::closure_job::ClosureJob;
 use crate::job_engine::job::{Dispatcher, JobTarget};
 
@@ -32,10 +30,9 @@ fn test_job_ordering() {
             let c1 = c1.clone();
             Box::pin(async move {
                 *c1.lock().unwrap() = 5;
-    })
+            })
         }),
     )));
-
 
     // job 2: increment to 6
     let c2 = c.clone();
@@ -47,7 +44,7 @@ fn test_job_ordering() {
             let c2 = c2.clone();
             Box::pin(async move {
                 *c2.lock().unwrap() += 1;
-    })
+            })
         }),
     )));
 

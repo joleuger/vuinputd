@@ -2,17 +2,17 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
+use ::cuse_lowlevel::*;
 use libc::{iovec, size_t, EBADRQC};
 use libc::{uinput_abs_setup, uinput_ff_erase, uinput_ff_upload, uinput_setup};
-use ::cuse_lowlevel::*;
-use log::{debug};
-use std::ffi::{CStr};
+use log::debug;
+use std::ffi::CStr;
 use std::io::Write;
 use std::os::fd::AsRawFd;
 use std::os::raw::{c_char, c_int, c_uint, c_void};
 use uinput_ioctls::*;
 
-use crate::cuse_device::{VuFileHandle, get_vuinput_state};
+use crate::cuse_device::{get_vuinput_state, VuFileHandle};
 use crate::job_engine::JOB_DISPATCHER;
 use crate::jobs::inject_in_container_job::InjectInContainerJob;
 use crate::jobs::remove_from_container_job::RemoveFromContainerJob;
@@ -46,7 +46,7 @@ pub unsafe extern "C" fn vuinput_ioctl(
         //UI_ABS_SETUP => UI_ABS_SETUP_WITHOUT_SIZE,
         _ => cmd_u64,
     };
-    let vufh= VuFileHandle::from_fuse_file_info(_fi.as_ref().unwrap());
+    let vufh = VuFileHandle::from_fuse_file_info(_fi.as_ref().unwrap());
     let vuinput_state_mutex = get_vuinput_state(&vufh).unwrap();
     let fh = &(*_fi).fh;
     let mut vuinput_state = vuinput_state_mutex.lock().unwrap();
@@ -166,21 +166,44 @@ pub unsafe extern "C" fn vuinput_ioctl(
             debug!("fh {}: syspath: {}", fh, sysname);
             let devnode = fetch_device_node(&sysname).unwrap();
             debug!("fh {}: devnode: {}", fh, devnode);
-            let (major,minor) = fetch_major_minor(&devnode).unwrap();
-            debug!("fh {}: major: {} minor: {} ", fh, major,minor);
-            vuinput_state.input_device = Some(VuInputDevice {major: major, minor: minor, syspath: sysname.clone(), devnode: devnode.clone() });
+            let (major, minor) = fetch_major_minor(&devnode).unwrap();
+            debug!("fh {}: major: {} minor: {} ", fh, major, minor);
+            vuinput_state.input_device = Some(VuInputDevice {
+                major: major,
+                minor: minor,
+                syspath: sysname.clone(),
+                devnode: devnode.clone(),
+            });
 
             // Create device in container, if the request was really from another namespace
-            if ! SELF_NAMESPACES.get().unwrap().equal_mnt_and_net(&vuinput_state.requesting_process.namespaces) {
-                let inject_job=InjectInContainerJob::new(vuinput_state.requesting_process.clone(),devnode.clone(),sysname.clone(),major,minor);
+            if !SELF_NAMESPACES
+                .get()
+                .unwrap()
+                .equal_mnt_and_net(&vuinput_state.requesting_process.namespaces)
+            {
+                let inject_job = InjectInContainerJob::new(
+                    vuinput_state.requesting_process.clone(),
+                    devnode.clone(),
+                    sysname.clone(),
+                    major,
+                    minor,
+                );
                 let awaiter = inject_job.get_awaiter_for_state();
-                JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(inject_job));
+                JOB_DISPATCHER
+                    .get()
+                    .unwrap()
+                    .lock()
+                    .unwrap()
+                    .dispatch(Box::new(inject_job));
                 awaiter(&jobs::inject_in_container_job::State::Finished);
-                debug!("fh {}: injecting dev-nodes in container has been finished ", fh);
+                debug!(
+                    "fh {}: injecting dev-nodes in container has been finished ",
+                    fh
+                );
             }
 
             // write a SYN-event (which is just zeros) just for validation
-            let syn_event : [u8; 24] = [0; 24];
+            let syn_event: [u8; 24] = [0; 24];
             vuinput_state.file.write_all(&syn_event).unwrap();
 
             fuse_lowlevel::fuse_reply_ioctl(_req, 0, std::ptr::null(), 0);
@@ -190,13 +213,32 @@ pub unsafe extern "C" fn vuinput_ioctl(
             let input_device = vuinput_state.input_device.take();
 
             // Remove device in container, if the request was really from another namespace
-            if input_device.is_some() && ! SELF_NAMESPACES.get().unwrap().equal_mnt_and_net(&vuinput_state.requesting_process.namespaces) {
+            if input_device.is_some()
+                && !SELF_NAMESPACES
+                    .get()
+                    .unwrap()
+                    .equal_mnt_and_net(&vuinput_state.requesting_process.namespaces)
+            {
                 let input_device = input_device.unwrap();
-                let remove_job=RemoveFromContainerJob::new(vuinput_state.requesting_process.clone(),input_device.devnode.clone(),input_device.syspath.clone(),input_device.major,input_device.minor);
+                let remove_job = RemoveFromContainerJob::new(
+                    vuinput_state.requesting_process.clone(),
+                    input_device.devnode.clone(),
+                    input_device.syspath.clone(),
+                    input_device.major,
+                    input_device.minor,
+                );
                 let awaiter = remove_job.get_awaiter_for_state();
-                JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(remove_job));
+                JOB_DISPATCHER
+                    .get()
+                    .unwrap()
+                    .lock()
+                    .unwrap()
+                    .dispatch(Box::new(remove_job));
                 awaiter(&jobs::remove_from_container_job::State::Finished);
-                debug!("fh {}: removing dev-nodes from container has been finished ", fh);
+                debug!(
+                    "fh {}: removing dev-nodes from container has been finished ",
+                    fh
+                );
             }
 
             ui_dev_destroy(fd).unwrap();
@@ -364,7 +406,6 @@ pub unsafe extern "C" fn vuinput_ioctl(
     }
 }
 
-
 pub fn fetch_device_node(path: &str) -> io::Result<String> {
     for entry in fs::read_dir(path)? {
         let entry = entry?; // propagate per-entry errors
@@ -396,4 +437,3 @@ pub fn fetch_major_minor(path: &str) -> io::Result<(u64, u64)> {
 
     Ok((major, minor))
 }
-

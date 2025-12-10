@@ -129,12 +129,10 @@ impl EventStore {
 
 pub static EVENT_STORE: OnceLock<Arc<Mutex<EventStore>>> = OnceLock::new();
 
-pub struct MonitorBackgroundLoop {
-}
+pub struct MonitorBackgroundLoop {}
 impl MonitorBackgroundLoop {
     pub fn new() -> Self {
-        Self {
-        }
+        Self {}
     }
 }
 
@@ -208,16 +206,14 @@ pub async fn udev_monitor_loop(cancel_token: Arc<AtomicBool>) {
                 let key = match key.as_str() {
                     "ID_VUINPUT_KEYBOARD" => "ID_INPUT_KEYBOARD".to_string(),
                     "ID_VUINPUT_MOUSE" => "ID_INPUT_MOUSE".to_string(),
-                    _ => key
+                    _ => key,
                 };
 
                 let value: String = property.value().to_str().unwrap().to_string();
-                if key!="ID_SEAT" {
+                if key != "ID_SEAT" {
                     properties.insert(key, value);
                 }
             }
-            
-
 
             let value_of_devpath = properties.get("DEVPATH").unwrap();
 

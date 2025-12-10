@@ -4,19 +4,18 @@
 
 pub mod state;
 pub mod vuinput_ioctl;
-pub mod vuinput_write;
-pub mod vuinput_release;
 pub mod vuinput_open;
+pub mod vuinput_release;
+pub mod vuinput_write;
 
-use std::{fs, io};
+use std::io::ErrorKind;
 use std::os::unix::fs::{FileTypeExt, MetadataExt};
-use std::io::{ErrorKind};
+use std::{fs, io};
 
 use ::cuse_lowlevel::*;
 use state::*;
 
 pub const BUS_USB: u16 = 0x03;
-
 
 // Instance of cuse_lowlevel_ops with all stubs assigned.
 // Setting to None leads to e.g. "write error: Function not implemented".

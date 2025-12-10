@@ -9,14 +9,17 @@ use nix::{
     unistd::{fork, ForkResult},
 };
 use std::{
-    fs::{self, File}, io::Read, os::fd::{AsFd, FromRawFd, OwnedFd, RawFd}, path::{Path}, process, sync::OnceLock
+    fs::{self, File},
+    io::Read,
+    os::fd::{AsFd, FromRawFd, OwnedFd, RawFd},
+    path::Path,
+    process,
+    sync::OnceLock,
 };
 
 use std::io;
 
-pub static SELF_NAMESPACES: OnceLock<Namespaces>= OnceLock::new();
-
-
+pub static SELF_NAMESPACES: OnceLock<Namespaces> = OnceLock::new();
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum Pid {
@@ -28,7 +31,7 @@ impl Pid {
     pub fn path(&self) -> String {
         match self {
             Pid::SelfPid => "/proc/self".to_string(),
-            Pid::Pid(pid_no) => format!("/proc/{}",pid_no)
+            Pid::Pid(pid_no) => format!("/proc/{}", pid_no),
         }
     }
 }
@@ -45,12 +48,10 @@ pub struct Namespaces {
     pub cgroup: Option<u64>,
     pub time: Option<u64>,
     pub time_for_children: Option<u64>,
-
 }
 
 /// Returns true if the process with `pid` is a 32-bit (compat) process. None, if unsure.
 pub fn is_compat_process(pid: Pid) -> Option<bool> {
-
     match pid {
         Pid::Pid(pid) => {
             const EI_CLASS: usize = 4;
@@ -75,8 +76,7 @@ pub fn is_compat_process(pid: Pid) -> Option<bool> {
                 Err(_) => None,
             }
         }
-        Pid::SelfPid =>
-            unreachable!()
+        Pid::SelfPid => unreachable!(),
     }
 }
 
@@ -112,12 +112,20 @@ impl std::fmt::Display for RequestingProcess {
         writeln!(f, "  uts:  {:?}", self.namespaces.uts)?;
         writeln!(f, "  ipc:  {:?}", self.namespaces.ipc)?;
         writeln!(f, "  pid:  {:?}", self.namespaces.pid)?;
-        writeln!(f, "  pid_for_children:  {:?}", self.namespaces.pid_for_children)?;
+        writeln!(
+            f,
+            "  pid_for_children:  {:?}",
+            self.namespaces.pid_for_children
+        )?;
         writeln!(f, "  user: {:?}", self.namespaces.user)?;
         writeln!(f, "  mnt:  {:?}", self.namespaces.mnt)?;
         writeln!(f, "  cgroup:  {:?}", self.namespaces.cgroup)?;
         writeln!(f, "  time:  {:?}", self.namespaces.time)?;
-        writeln!(f, "  time_for_children:  {:?}", self.namespaces.time_for_children)?;
+        writeln!(
+            f,
+            "  time_for_children:  {:?}",
+            self.namespaces.time_for_children
+        )?;
         Ok(())
     }
 }
@@ -168,44 +176,41 @@ pub fn get_namespace(pid: Pid) -> Namespaces {
 }
 
 fn get_ppid(pid: Pid) -> Option<Pid> {
-    let content =
-        match pid {
-            Pid::SelfPid => fs::read_to_string(format!("/proc/self/status")).ok()?,
-            Pid::Pid(pid) => fs::read_to_string(format!("/proc/{}/status", pid)).ok()?
-        };
-    let ppid=content
+    let content = match pid {
+        Pid::SelfPid => fs::read_to_string(format!("/proc/self/status")).ok()?,
+        Pid::Pid(pid) => fs::read_to_string(format!("/proc/{}/status", pid)).ok()?,
+    };
+    let ppid = content
         .lines()
         .find(|line| line.starts_with("PPid:"))
         .and_then(|line| line.split_whitespace().nth(1))
         .and_then(|ppid| ppid.parse::<i32>().ok());
     match ppid {
         None => None,
-        Some(ppid)=> Some(Pid::Pid(ppid))
+        Some(ppid) => Some(Pid::Pid(ppid)),
     }
 }
 
-
-
 pub fn get_requesting_process(pid: Pid) -> RequestingProcess {
-
     match pid {
-        Pid::Pid(_) =>
-        {
+        Pid::Pid(_) => {
             let is_compat = match is_compat_process(pid) {
                 Some(false) => {
-                    debug!("identified process {} as 64 bit process",pid.path());
+                    debug!("identified process {} as 64 bit process", pid.path());
                     false
-                },
+                }
                 Some(true) => {
-                    debug!("identified process {} as 32 bit process",pid.path());
+                    debug!("identified process {} as 32 bit process", pid.path());
                     true
-                },
+                }
                 None => {
-                    debug!("could not identify bitness of process {}. Assume 64 bit process",pid.path());
+                    debug!(
+                        "could not identify bitness of process {}. Assume 64 bit process",
+                        pid.path()
+                    );
                     false
-                },
+                }
             };
-
 
             // go up the parent hierarchy until we find a parent with different namespaces
             let mut ppid = pid;
@@ -214,19 +219,21 @@ pub fn get_requesting_process(pid: Pid) -> RequestingProcess {
                 let candidate_ppid = get_ppid(ppid);
                 match candidate_ppid {
                     None => break,
-                    Some(candidate_ppid) =>
-                    {
+                    Some(candidate_ppid) => {
                         let ppid_nsinodes = get_namespace(candidate_ppid);
                         if nsinodes.equal_mnt_and_net(&ppid_nsinodes) {
-                            ppid=candidate_ppid;
+                            ppid = candidate_ppid;
                         } else {
                             break;
                         }
                     }
-
                 }
             }
-            debug!("identified process {} as root of process id {}",ppid.path(),pid.path());
+            debug!(
+                "identified process {} as root of process id {}",
+                ppid.path(),
+                pid.path()
+            );
 
             let nspath = format!("{}/ns", pid.path());
             let nsroot = format!("{}/ns", ppid.path());
@@ -234,19 +241,21 @@ pub fn get_requesting_process(pid: Pid) -> RequestingProcess {
                 nspath: nspath,
                 nsroot: nsroot,
                 namespaces: nsinodes,
-                is_compat: is_compat
+                is_compat: is_compat,
             }
-        },
-        Pid::SelfPid =>
-        {
+        }
+        Pid::SelfPid => {
             unreachable!();
-        },
+        }
     }
 }
 
 /// Runs a function inside the given network and mount namespaces.
 /// Returns the child PID so the caller can `waitpid` on it.
-pub fn run_in_net_and_mnt_namespace(ns: &RequestingProcess, func: Box<dyn Fn()>) -> nix::Result<nix::unistd::Pid> {
+pub fn run_in_net_and_mnt_namespace(
+    ns: &RequestingProcess,
+    func: Box<dyn Fn()>,
+) -> nix::Result<nix::unistd::Pid> {
     //Note: The child process is created with a single thread—the one that called fork().
 
     match unsafe { fork()? } {
@@ -255,7 +264,7 @@ pub fn run_in_net_and_mnt_namespace(ns: &RequestingProcess, func: Box<dyn Fn()>)
             Ok(child)
         }
         ForkResult::Child => {
-            debug!("Start new process {}",process::id());
+            debug!("Start new process {}", process::id());
             // enter namespace
             let path: &Path = Path::new(ns.nsroot.as_str());
             debug!("Entering namespaces of process {}. We assume this is the root process of the container.",ns.nsroot.clone());
@@ -267,7 +276,7 @@ pub fn run_in_net_and_mnt_namespace(ns: &RequestingProcess, func: Box<dyn Fn()>)
             let mnt = File::open(ns.nsroot.clone() + "/mnt").expect("mnt not found");
             setns(net.as_fd(), CloneFlags::CLONE_NEWNET).expect("couldn't enter net");
             setns(mnt.as_fd(), CloneFlags::CLONE_NEWNS).expect("couldn't enter mnt");
-            
+
             // execute your function
             func();
             std::process::exit(0);
@@ -276,15 +285,13 @@ pub fn run_in_net_and_mnt_namespace(ns: &RequestingProcess, func: Box<dyn Fn()>)
 }
 
 pub async fn await_process(pid: Pid) -> io::Result<i32> {
-
     match pid {
-        Pid::Pid(pid) =>
-        {
-            unsafe  {
+        Pid::Pid(pid) => {
+            unsafe {
                 // Use pidfd_open() (libc) to get a real FD
                 let pidfd = libc::syscall(libc::SYS_pidfd_open, pid, 0);
                 if pidfd == -1 {
-                    return Err(io::Error::last_os_error())
+                    return Err(io::Error::last_os_error());
                 }
                 let owned_fd = OwnedFd::from_raw_fd(pidfd as RawFd);
 
@@ -294,35 +301,28 @@ pub async fn await_process(pid: Pid) -> io::Result<i32> {
 
                 // Retrieve the exit code using waitid()
                 let mut si: libc::siginfo_t = std::mem::zeroed();
-                let r = libc::waitid(
-                    libc::P_PID,
-                    pid as u32,
-                    &mut si,
-                    libc::WEXITED,
-                );
+                let r = libc::waitid(libc::P_PID, pid as u32, &mut si, libc::WEXITED);
                 if r != 0 {
                     return Err(io::Error::last_os_error());
                 }
 
                 Ok(si.si_status())
             }
-        },
-        Pid::SelfPid =>
-        {
+        }
+        Pid::SelfPid => {
             unreachable!();
-        },
+        }
     }
 }
-
 
 pub fn check_permissions() -> Result<(), std::io::Error> {
     let path = Path::new("/proc/self/status");
     debug!("Capabilities of vuinputd process:");
-    fs::read_to_string(path).
-        and_then(|status_file| {
-            status_file.lines()
-                        .filter(|line| line.starts_with("Cap"))
-                        .for_each(move |x| debug!("{}",x));
-            Ok(())
-        })
+    fs::read_to_string(path).and_then(|status_file| {
+        status_file
+            .lines()
+            .filter(|line| line.starts_with("Cap"))
+            .for_each(move |x| debug!("{}", x));
+        Ok(())
+    })
 }

@@ -2,18 +2,18 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
-use std::sync::OnceLock;
-use libc::{O_CLOEXEC};
-use libc::{ENOENT};
 use ::cuse_lowlevel::*;
+use libc::ENOENT;
+use libc::O_CLOEXEC;
 use log::{debug, error};
-use std::fs::{OpenOptions};
-use std::os::unix::fs::{OpenOptionsExt};
+use std::fs::OpenOptions;
+use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::OnceLock;
 
-use crate::process_tools::{Pid, get_requesting_process};
 use crate::cuse_device::*;
+use crate::process_tools::{get_requesting_process, Pid};
 
 pub static VUINPUT_COUNTER: OnceLock<AtomicU64> = OnceLock::new();
 
@@ -47,7 +47,7 @@ pub unsafe extern "C" fn vuinput_open(
                 VuInputState {
                     file: v,
                     requesting_process,
-                    input_device: None
+                    input_device: None,
                 },
             )
             .unwrap();

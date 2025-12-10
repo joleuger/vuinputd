@@ -3,7 +3,7 @@
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
 use std::collections::HashMap;
-use std::fs::{File};
+use std::fs::File;
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
 use ::cuse_lowlevel::*;
@@ -12,8 +12,8 @@ use crate::process_tools::RequestingProcess;
 
 #[derive(Debug)]
 pub struct VuInputDevice {
-    pub major : u64,
-    pub minor : u64,
+    pub major: u64,
+    pub minor: u64,
     pub syspath: String,
     pub devnode: String,
 }
@@ -22,12 +22,12 @@ pub struct VuInputDevice {
 pub struct VuInputState {
     pub file: File,
     pub requesting_process: RequestingProcess,
-    pub input_device: Option<VuInputDevice>
+    pub input_device: Option<VuInputDevice>,
 }
 
-#[derive(Debug,Eq, Hash, PartialEq, Clone)]
+#[derive(Debug, Eq, Hash, PartialEq, Clone)]
 pub enum VuFileHandle {
-    Fh(u64)
+    Fh(u64),
 }
 
 impl VuFileHandle {
@@ -39,15 +39,13 @@ impl VuFileHandle {
 impl std::fmt::Display for VuFileHandle {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            VuFileHandle::Fh(fh) => writeln!(f, "VuFileHandle({:?})",fh)?,
+            VuFileHandle::Fh(fh) => writeln!(f, "VuFileHandle({:?})", fh)?,
         }
         Ok(())
     }
 }
 
-pub fn get_vuinput_state(
-    fh:&VuFileHandle,
-) -> Result<Arc<Mutex<VuInputState>>, String> {
+pub fn get_vuinput_state(fh: &VuFileHandle) -> Result<Arc<Mutex<VuInputState>>, String> {
     let map = VUINPUT_STATE
         .get()
         .ok_or("global not initialized".to_string())?;
@@ -58,11 +56,7 @@ pub fn get_vuinput_state(
         .ok_or("handle not opened".to_string())
 }
 
-
-pub fn insert_vuinput_state(
-    fh:&VuFileHandle,
-    state: VuInputState,
-) -> Result<(), String> {
+pub fn insert_vuinput_state(fh: &VuFileHandle, state: VuInputState) -> Result<(), String> {
     let map = VUINPUT_STATE
         .get()
         .ok_or("global not initialized".to_string())?;
@@ -79,9 +73,7 @@ pub fn insert_vuinput_state(
     Ok(())
 }
 
-pub fn remove_vuinput_state(
-    fh:&VuFileHandle,
-) -> Result<Arc<Mutex<VuInputState>>, String> {
+pub fn remove_vuinput_state(fh: &VuFileHandle) -> Result<Arc<Mutex<VuInputState>>, String> {
     let map = VUINPUT_STATE
         .get()
         .ok_or("global not initialized".to_string())?;
@@ -91,22 +83,24 @@ pub fn remove_vuinput_state(
 }
 
 pub fn initialize_vuinput_state() {
-    VUINPUT_STATE.set(RwLock::new(HashMap::new())).expect("failed to initialize global state");
+    VUINPUT_STATE
+        .set(RwLock::new(HashMap::new()))
+        .expect("failed to initialize global state");
 }
 
 pub fn initialize_dedup_last_error() {
-    DEDUP_LAST_ERROR.set(Mutex::new(None)).expect("failed to initialize the log deduplication state");
+    DEDUP_LAST_ERROR
+        .set(Mutex::new(None))
+        .expect("failed to initialize the log deduplication state");
 }
-
 
 #[derive(Debug)]
 pub enum VuError {
-    WriteError
+    WriteError,
 }
 
-
-pub static VUINPUT_STATE: OnceLock<RwLock<HashMap<VuFileHandle, Arc<Mutex<VuInputState>>>>> = OnceLock::new();
+pub static VUINPUT_STATE: OnceLock<RwLock<HashMap<VuFileHandle, Arc<Mutex<VuInputState>>>>> =
+    OnceLock::new();
 
 // For log limiting. Idea: Move to log_limit crate
-pub static DEDUP_LAST_ERROR: OnceLock<Mutex<Option<(u64,VuError)>>> = OnceLock::new(); 
-
+pub static DEDUP_LAST_ERROR: OnceLock<Mutex<Option<(u64, VuError)>>> = OnceLock::new();

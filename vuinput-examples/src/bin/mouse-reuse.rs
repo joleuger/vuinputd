@@ -23,8 +23,7 @@ const REL_Y: i32 = 1;
 const SYN_REPORT: i32 = 0;
 const BUS_USB: u16 = 0x03;
 
-/// 
-
+///
 
 fn emit(fd: c_int, ev_type: i32, code: i32, val: i32) -> io::Result<()> {
     // libc's input_event struct layout:
@@ -62,11 +61,10 @@ fn main() -> io::Result<()> {
     // open device - matches: open("/dev/uinput-test", O_WRONLY | O_NONBLOCK);
 
     let args: Vec<String> = std::env::args().collect();
-    let device=
-        match args.len() {
-            2 => args[1].clone(),
-            _ => "/dev/uinput".to_string()
-        };
+    let device = match args.len() {
+        2 => args[1].clone(),
+        _ => "/dev/uinput".to_string(),
+    };
 
     let path = CString::new(device).unwrap();
     let fd = unsafe { open(path.as_ptr(), O_WRONLY | O_NONBLOCK) };
@@ -97,18 +95,15 @@ fn main() -> io::Result<()> {
             std::process::exit(1);
         });
 
-
         ui_set_evbit(fd, EV_REL.try_into().unwrap()).unwrap_or_else(|e| {
             eprintln!("ui_set_evbit(EV_REL) failed: {:?}", e);
             std::process::exit(1);
         });
 
-
         ui_set_relbit(fd, REL_X.try_into().unwrap()).unwrap_or_else(|e| {
             eprintln!("ui_set_relbit(REL_X) failed: {:?}", e);
             std::process::exit(1);
         });
-
 
         ui_set_relbit(fd, REL_Y.try_into().unwrap()).unwrap_or_else(|e| {
             eprintln!("ui_set_relbit(REL_Y) failed: {:?}", e);
@@ -216,7 +211,6 @@ fn main() -> io::Result<()> {
             emit(fd, EV_SYN, SYN_REPORT, 0)?;
             sleep(Duration::from_millis(300));
         }
-
 
         // Give userspace time to read events
         sleep(Duration::from_secs(5));

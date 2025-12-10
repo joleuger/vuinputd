@@ -5,18 +5,17 @@
 use nix::sys::stat::{makedev, mknod, stat, Mode, SFlag};
 use std::error::Error;
 use std::fs;
-use std::os::unix::fs::{PermissionsExt};
+use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
 pub fn ensure_input_device(dev_path: String, major: u64, minor: u64) -> Result<(), Box<dyn Error>> {
-    
     let input_dir = Path::new("/dev/input");
     // Create directory like `mkdir -p`
     if !input_dir.exists() {
         println!("Create /dev/input");
         fs::create_dir_all(input_dir)?;
     }
-    
+
     let path = Path::new(&dev_path);
     let expected_dev = makedev(major, minor);
     let expected_mode = 0o666;
@@ -84,10 +83,10 @@ pub fn remove_input_device(dev_path: String, major: u64, minor: u64) -> Result<(
             let is_char = (st.st_mode & libc::S_IFMT as u32) == libc::S_IFCHR as u32;
             let dev_ok = st.st_rdev == expected_dev;
             if !(is_char && dev_ok) {
-                return Err("Device that should be deleted has wrong major and minor".into())
+                return Err("Device that should be deleted has wrong major and minor".into());
             }
         }
-        Err(_x) => return Err("Could not execute stat on device file".into())
+        Err(_x) => return Err("Could not execute stat on device file".into()),
     }
 
     let _ = fs::remove_file(path);

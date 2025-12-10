@@ -9,7 +9,6 @@ use std::path::Path;
 /// Ensure required udev directories and files exist
 pub fn ensure_udev_structure() -> io::Result<()> {
     // TODO: this _must_ exist, before a service using libinput is run. The time of device creation might be too late
-    
 
     let data_dir = Path::new("/run/udev/data");
     let control_file = Path::new("/run/udev/control");
@@ -53,7 +52,6 @@ pub fn write_udev_data(content: &str, major: u64, minor: u64) -> io::Result<()> 
         cleaned.push_str(&line);
         cleaned.push('\n');
     }
-    
 
     let path = format!("/run/udev/data/c{}:{}", major, minor);
     let mut file = File::create(&path)?;
@@ -65,7 +63,6 @@ pub fn write_udev_data(content: &str, major: u64, minor: u64) -> io::Result<()> 
 /// Delete udev data for a given major/minor number
 /// - `major`, `minor` = device numbers
 pub fn delete_udev_data(major: u64, minor: u64) -> io::Result<()> {
-
     let path = format!("/run/udev/data/c{}:{}", major, minor);
     fs::remove_file(&path)?;
     Ok(())

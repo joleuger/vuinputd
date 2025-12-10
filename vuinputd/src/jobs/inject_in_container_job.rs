@@ -2,22 +2,36 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
-use std::{collections::HashMap, future::Future, pin::Pin, sync::{Arc, Condvar, Mutex}, time::Duration};
+use std::{
+    collections::HashMap,
+    future::Future,
+    pin::Pin,
+    sync::{Arc, Condvar, Mutex},
+    time::Duration,
+};
 
 use async_io::Timer;
 use log::debug;
 
-use crate::{job_engine::job::{Job, JobTarget}, jobs::{mknod_input_device::ensure_input_device, monitor_udev_job::EVENT_STORE, netlink_message::send_udev_monitor_message_with_properties, runtime_data::{ensure_udev_structure, read_udev_data, write_udev_data}}, process_tools::{Pid, RequestingProcess, await_process, run_in_net_and_mnt_namespace}};
+use crate::{
+    job_engine::job::{Job, JobTarget},
+    jobs::{
+        mknod_input_device::ensure_input_device,
+        monitor_udev_job::EVENT_STORE,
+        netlink_message::send_udev_monitor_message_with_properties,
+        runtime_data::{ensure_udev_structure, read_udev_data, write_udev_data},
+    },
+    process_tools::{await_process, run_in_net_and_mnt_namespace, Pid, RequestingProcess},
+};
 
-
-#[derive(Clone,Debug,Copy,PartialOrd,PartialEq)]
+#[derive(Clone, Debug, Copy, PartialOrd, PartialEq)]
 pub enum State {
     Initialized,
     Started,
     Finished,
 }
 
-#[derive(Clone,Debug)]
+#[derive(Clone, Debug)]
 pub struct InjectInContainerJob {
     requesting_process: RequestingProcess,
     target: JobTarget,
@@ -25,17 +39,23 @@ pub struct InjectInContainerJob {
     sys_path: String,
     major: u64,
     minor: u64,
-    sync_state: Arc<(Mutex<State>,Condvar)>,
+    sync_state: Arc<(Mutex<State>, Condvar)>,
 }
 
 impl InjectInContainerJob {
-    pub fn new(requesting_process: RequestingProcess,dev_path: String, sys_path: String, major: u64, minor: u64) -> Self {
+    pub fn new(
+        requesting_process: RequestingProcess,
+        dev_path: String,
+        sys_path: String,
+        major: u64,
+        minor: u64,
+    ) -> Self {
         Self {
             requesting_process: requesting_process.clone(),
             target: JobTarget::Container(requesting_process),
             dev_path: dev_path,
             sys_path: sys_path,
-            major: major ,
+            major: major,
             minor: minor,
             sync_state: Arc::new((Mutex::new(State::Initialized), Condvar::new())),
         }
@@ -52,10 +72,10 @@ impl InjectInContainerJob {
     pub fn get_awaiter_for_state(&self) -> impl FnOnce(&State) -> () {
         // pattern is described on https://doc.rust-lang.org/stable/std/sync/struct.Condvar.html
         let sync_state = self.sync_state.clone();
-        let awaiter =  move | state: &State|  {
+        let awaiter = move |state: &State| {
             let (lock, cvar) = &*sync_state;
             let mut current_state = lock.lock().unwrap();
-            while *current_state  < *state  {
+            while *current_state < *state {
                 current_state = cvar.wait(current_state).unwrap();
             }
         };
@@ -87,30 +107,33 @@ impl InjectInContainerJob {
         // Should be: Wait for the device to be created, the runtime data to be written and the
         // netlink message to be sent
         self.set_state(&State::Started);
-        let mut netlink_data: Option<HashMap<String,String>> = None;
+        let mut netlink_data: Option<HashMap<String, String>> = None;
         let mut runtime_data: Option<String> = None;
         let mut number_of_attempt = 1;
-        while number_of_attempt<=50 && !(netlink_data.is_some() && runtime_data.is_some()) {
-
+        while number_of_attempt <= 50 && !(netlink_data.is_some() && runtime_data.is_some()) {
             if netlink_data.is_none() {
-
-                if let Some(netlink_event)=EVENT_STORE.get().unwrap().lock().unwrap().take(&self.sys_path) {
+                if let Some(netlink_event) = EVENT_STORE
+                    .get()
+                    .unwrap()
+                    .lock()
+                    .unwrap()
+                    .take(&self.sys_path)
+                {
                     if netlink_event.tombstone || netlink_event.remove_data.is_some() {
                         debug!("do nothing, because the device has already been removed in the meantime");
                         return;
                     }
-                    netlink_data=netlink_event.add_data;
+                    netlink_data = netlink_event.add_data;
                 };
             }
             if runtime_data.is_none() {
-                runtime_data = read_udev_data(self.major,self.minor).ok();
-
+                runtime_data = read_udev_data(self.major, self.minor).ok();
             }
 
-            number_of_attempt+=1;
+            number_of_attempt += 1;
             // wait a maximum of 5 seconds == 50 attempts
             Timer::after(Duration::from_millis(100)).await;
-        } 
+        }
         if netlink_data.is_none() || runtime_data.is_none() {
             if netlink_data.is_none() {
                 debug!("Give up reading netlink data");
@@ -124,27 +147,29 @@ impl InjectInContainerJob {
 
         // define for capturing
         let major = self.major;
-        let minor=self.minor;
+        let minor = self.minor;
         let runtime_data = runtime_data.unwrap();
         let netlink_data = netlink_data.unwrap();
         let dev_path = self.dev_path.clone();
 
-
-        let child_pid = run_in_net_and_mnt_namespace(&self.requesting_process, Box::new(move || {
-
-            if let Err(e) = ensure_input_device(dev_path.clone(), self.major, self.minor) {
-                debug!("Error creating input device {}: {e}",dev_path.clone());
-            };
-            ensure_udev_structure().unwrap();
-            if let Err(e) = write_udev_data(runtime_data.as_str(), major, minor) {
-                debug!("Error writing udev data for device {}: {e}",dev_path.clone());
-            };
-            send_udev_monitor_message_with_properties(netlink_data.clone());
-
-        }))
+        let child_pid = run_in_net_and_mnt_namespace(
+            &self.requesting_process,
+            Box::new(move || {
+                if let Err(e) = ensure_input_device(dev_path.clone(), self.major, self.minor) {
+                    debug!("Error creating input device {}: {e}", dev_path.clone());
+                };
+                ensure_udev_structure().unwrap();
+                if let Err(e) = write_udev_data(runtime_data.as_str(), major, minor) {
+                    debug!(
+                        "Error writing udev data for device {}: {e}",
+                        dev_path.clone()
+                    );
+                };
+                send_udev_monitor_message_with_properties(netlink_data.clone());
+            }),
+        )
         .expect("subprocess should work");
         let _exit_info = await_process(Pid::Pid(child_pid.as_raw())).await.unwrap();
         self.set_state(&State::Finished);
-
     }
 }

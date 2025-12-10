@@ -7,7 +7,6 @@ use std::pin::Pin;
 
 use crate::job_engine::job::{Dispatcher, Job, JobTarget};
 
-
 pub struct ClosureJob {
     desc: String,
     execute_after_cancellation: bool,
@@ -79,10 +78,9 @@ pub fn example() {
     //     println!("Running container job for {:?}", target);
     // }));
 
-    // 
-    // JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(ClosureJob::new("Monitor udev events", JobTarget::BackgroundLoop,false, 
+    //
+    // JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(ClosureJob::new("Monitor udev events", JobTarget::BackgroundLoop,false,
     //     Box::new(move |_target| Box::pin(monitor_udev::udev_monitor_loop(cancel_token.clone()))))));
-
 
     // Allow loops to run briefly before dropping all senders -> graceful shutdown
     dispatcher.close();

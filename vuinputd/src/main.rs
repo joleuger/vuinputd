@@ -20,25 +20,24 @@
 use ::cuse_lowlevel::*;
 use log::info;
 use std::ffi::CString;
-use std::os::raw::{c_char};
-use std::sync::atomic::{AtomicU64};
-use std::sync::{Mutex};
+use std::os::raw::c_char;
+use std::sync::atomic::AtomicU64;
+use std::sync::Mutex;
 
 pub mod cuse_device;
 
 use crate::cuse_device::state::{initialize_dedup_last_error, initialize_vuinput_state};
+use crate::cuse_device::vuinput_make_cuse_ops;
 use crate::cuse_device::vuinput_open::VUINPUT_COUNTER;
-use crate::cuse_device::{vuinput_make_cuse_ops};
 use crate::jobs::monitor_udev_job::MonitorBackgroundLoop;
 
 pub mod process_tools;
 
 pub mod job_engine;
-use crate::job_engine::{JOB_DISPATCHER, job::*};
+use crate::job_engine::{job::*, JOB_DISPATCHER};
 use crate::process_tools::*;
 
 pub mod jobs;
-
 
 fn main() -> std::io::Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug")).init();
@@ -48,11 +47,22 @@ fn main() -> std::io::Result<()> {
     let args: Vec<String> = std::env::args().collect();
 
     initialize_vuinput_state();
-    VUINPUT_COUNTER.set(AtomicU64::new(3)).expect("failed to initialize the counter that provides the values of the CUSE file handles"); // 3, because 1 and 2 are usually STDOUT and STDERR
-    JOB_DISPATCHER.set(Mutex::new(Dispatcher::new())).expect("failed to initialize the job dispatcher");
-    SELF_NAMESPACES.set(get_namespace(Pid::SelfPid)).expect("failed to retrieve the namespaces of the vuinputd process");
+    VUINPUT_COUNTER.set(AtomicU64::new(3)).expect(
+        "failed to initialize the counter that provides the values of the CUSE file handles",
+    ); // 3, because 1 and 2 are usually STDOUT and STDERR
+    JOB_DISPATCHER
+        .set(Mutex::new(Dispatcher::new()))
+        .expect("failed to initialize the job dispatcher");
+    SELF_NAMESPACES
+        .set(get_namespace(Pid::SelfPid))
+        .expect("failed to retrieve the namespaces of the vuinputd process");
     initialize_dedup_last_error();
-    JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(MonitorBackgroundLoop::new()));
+    JOB_DISPATCHER
+        .get()
+        .unwrap()
+        .lock()
+        .unwrap()
+        .dispatch(Box::new(MonitorBackgroundLoop::new()));
 
     info!("Starting vuinputd");
 
@@ -62,7 +72,7 @@ fn main() -> std::io::Result<()> {
 
     let mut dev_info_argv: Vec<*const c_char> = vec![
         vuinput_devicename.as_ptr(), // pointer to the C string
-        std::ptr::null(),          // null terminator, often required by C APIs
+        std::ptr::null(),            // null terminator, often required by C APIs
     ];
 
     // setting dev_major and dev_minor to 0 leads to a dynamic assignment of the major and minor, very likely beginning with 234:0
@@ -104,7 +114,12 @@ fn main() -> std::io::Result<()> {
     }
     info!("Stopping vuinputd");
     JOB_DISPATCHER.get().unwrap().lock().unwrap().close();
-    JOB_DISPATCHER.get().unwrap().lock().unwrap().wait_until_finished();
+    JOB_DISPATCHER
+        .get()
+        .unwrap()
+        .lock()
+        .unwrap()
+        .wait_until_finished();
 
     Ok(())
 }

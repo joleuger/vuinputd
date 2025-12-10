@@ -4,7 +4,7 @@
 // Author: Johannes Leupolz <dev@leupolz.eu>
 //
 // This library is heavily baased on https://github.com/richard-w/libfuse-sys
-// but adopted to only provide the low-level modules of fuse and cuse. 
+// but adopted to only provide the low-level modules of fuse and cuse.
 
 extern crate bindgen;
 extern crate pkg_config;
@@ -14,7 +14,6 @@ use std::iter;
 use std::path::PathBuf;
 
 const FUSE_USE_VERSION: u32 = 314; //fuse version of ubuntu 24.04
-
 
 fn fuse_binding_filter(builder: bindgen::Builder) -> bindgen::Builder {
     let builder = builder
@@ -103,18 +102,13 @@ fn main() {
     let mut pkgcfg = pkg_config::Config::new();
 
     // Find libfuse
-    let fuse3_lib = pkgcfg.cargo_metadata(true).probe("fuse3").expect("Failed to find pkg-config module fuse3");
- 
+    let fuse3_lib = pkgcfg
+        .cargo_metadata(true)
+        .probe("fuse3")
+        .expect("Failed to find pkg-config module fuse3");
+
     // Generate lowlevel bindings
-    generate_fuse_bindings(
-        "fuse_lowlevel.h",
-        &fuse3_lib,
-        fuse_binding_filter,
-    );
+    generate_fuse_bindings("fuse_lowlevel.h", &fuse3_lib, fuse_binding_filter);
     // Generate lowlevel cuse bindings
-    generate_fuse_bindings(
-        "cuse_lowlevel.h",
-        &fuse3_lib,
-        cuse_binding_filter,
-    );
+    generate_fuse_bindings("cuse_lowlevel.h", &fuse3_lib, cuse_binding_filter);
 }
