@@ -87,7 +87,7 @@ pub fn remove_input_device(dev_path: String, major: u64, minor: u64) -> Result<(
                 return Err("Device that should be deleted has wrong major and minor".into())
             }
         }
-        Err(x) => return Err("Could not execute stat on device file".into())
+        Err(_x) => return Err("Could not execute stat on device file".into())
     }
 
     let _ = fs::remove_file(path);

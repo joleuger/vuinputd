@@ -12,12 +12,14 @@ use std::os::fd::AsRawFd;
 use std::os::raw::{c_char, c_int, c_uint, c_void};
 use uinput_ioctls::*;
 
-use crate::cuse_device::{SYS_INPUT_DIR, VuFileHandle, VuInputDevice, fetch_device_node, get_vuinput_state};
+use crate::cuse_device::{VuFileHandle, get_vuinput_state};
 use crate::job_engine::JOB_DISPATCHER;
 use crate::jobs::inject_in_container_job::InjectInContainerJob;
 use crate::jobs::remove_from_container_job::RemoveFromContainerJob;
 use crate::process_tools::SELF_NAMESPACES;
 use crate::{cuse_device::*, jobs};
+
+pub const SYS_INPUT_DIR: &str = "/sys/devices/virtual/input/";
 
 pub unsafe extern "C" fn vuinput_ioctl(
     _req: fuse_lowlevel::fuse_req_t,
@@ -166,7 +168,7 @@ pub unsafe extern "C" fn vuinput_ioctl(
             debug!("fh {}: devnode: {}", fh, devnode);
             let (major,minor) = fetch_major_minor(&devnode).unwrap();
             debug!("fh {}: major: {} minor: {} ", fh, major,minor);
-            vuinput_state.input_device = Some(VuInputDevice {cuse_fh:*fh, major: major, minor: minor, syspath: sysname.clone(), devnode: devnode.clone(), runtime_data: None, netlink_data: None });
+            vuinput_state.input_device = Some(VuInputDevice {major: major, minor: minor, syspath: sysname.clone(), devnode: devnode.clone() });
 
             // Create device in container, if the request was really from another namespace
             if ! SELF_NAMESPACES.get().unwrap().equal_mnt_and_net(&vuinput_state.requesting_process.namespaces) {
@@ -211,6 +213,7 @@ pub unsafe extern "C" fn vuinput_ioctl(
             );
             // replace vendor and product id to the values from sunshine (see inputtino_common.h of sunshine)
             // The pid is registered for vuinputd, see https://pid.codes/1209/5020/
+            (*setup_ptr).id.bustype = BUS_USB;
             (*setup_ptr).id.product = 0x5020;
             (*setup_ptr).id.vendor = 0x1209;
             ui_dev_setup(fd, setup_ptr).unwrap();
@@ -360,3 +363,37 @@ pub unsafe extern "C" fn vuinput_ioctl(
         }
     }
 }
+
+
+pub fn fetch_device_node(path: &str) -> io::Result<String> {
+    for entry in fs::read_dir(path)? {
+        let entry = entry?; // propagate per-entry errors
+        if let Some(name) = entry.file_name().to_str() {
+            if name.starts_with("event") {
+                return Ok(format!("/dev/input/{}", name));
+            }
+        }
+    }
+    // If no device is found, return an error
+    Err(io::Error::new(ErrorKind::NotFound, "no device found"))
+}
+
+/// Returns (major, minor) numbers of a device node at `path`
+pub fn fetch_major_minor(path: &str) -> io::Result<(u64, u64)> {
+    let metadata = fs::metadata(path)?;
+
+    // Ensure it's a character device
+    if !metadata.file_type().is_char_device() {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Not a character device",
+        ));
+    }
+
+    let rdev = metadata.rdev();
+    let major = ((rdev >> 8) & 0xfff) as u64;
+    let minor = ((rdev & 0xff) | ((rdev >> 12) & 0xfff00)) as u64;
+
+    Ok((major, minor))
+}
+

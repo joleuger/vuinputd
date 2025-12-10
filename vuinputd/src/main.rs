@@ -19,16 +19,16 @@
 
 use ::cuse_lowlevel::*;
 use log::info;
-use std::collections::HashMap;
 use std::ffi::CString;
 use std::os::raw::{c_char};
 use std::sync::atomic::{AtomicU64};
-use std::sync::{Mutex, RwLock};
+use std::sync::{Mutex};
 
 pub mod cuse_device;
 
+use crate::cuse_device::state::{initialize_dedup_last_error, initialize_vuinput_state};
 use crate::cuse_device::vuinput_open::VUINPUT_COUNTER;
-use crate::cuse_device::{DEDUP_LAST_ERROR, VUINPUT_STATE, vuinput_make_cuse_ops};
+use crate::cuse_device::{vuinput_make_cuse_ops};
 use crate::jobs::monitor_udev_job::MonitorBackgroundLoop;
 
 pub mod process_tools;
@@ -43,15 +43,15 @@ pub mod jobs;
 fn main() -> std::io::Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug")).init();
 
-    check_permissions().expect("failed to read the capabilities of the vuinputd process");;
+    check_permissions().expect("failed to read the capabilities of the vuinputd process");
 
     let args: Vec<String> = std::env::args().collect();
 
-    VUINPUT_STATE.set(RwLock::new(HashMap::new())).expect("failed to initialize global state");
+    initialize_vuinput_state();
     VUINPUT_COUNTER.set(AtomicU64::new(3)).expect("failed to initialize the counter that provides the values of the CUSE file handles"); // 3, because 1 and 2 are usually STDOUT and STDERR
     JOB_DISPATCHER.set(Mutex::new(Dispatcher::new())).expect("failed to initialize the job dispatcher");
     SELF_NAMESPACES.set(get_namespace(Pid::SelfPid)).expect("failed to retrieve the namespaces of the vuinputd process");
-    DEDUP_LAST_ERROR.set(Mutex::new(None)).expect("failed to initialize the log deduplication state");
+    initialize_dedup_last_error();
     JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(MonitorBackgroundLoop::new()));
 
     info!("Starting vuinputd");

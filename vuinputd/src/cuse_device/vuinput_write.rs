@@ -14,7 +14,6 @@ use libc::{__s32, __u16, input_event};
 use crate::cuse_device::*;
 
 
-
 // TODO: compat-mode+ ensure sizeof(struct input_event)
 pub unsafe extern "C" fn vuinput_write(
     _req: fuse_lowlevel::fuse_req_t,
