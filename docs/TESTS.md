@@ -1,5 +1,9 @@
 # Tests
 
+## Integration tests
+
+Run with `cargo test -p vuinputd-tests --features "requires-root requires-uinput"`.
+
 ## Manual end-to-end tests
 
 | vuinputd | host | input type | app that creates device | app that reads device | working | Notes |

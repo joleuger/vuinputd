@@ -1,0 +1,17 @@
+[package]
+name = "vuinputd-tests"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "keyboard-in-container"
+
+[dependencies]
+uinput-ioctls = { path = "../uinput-ioctls" }
+nix = { version = "0.30", features = ["ioctl"] } # ioctl & libc bindings
+libc = "0.2"        # raw system calls
+libudev = "0.3" # enumerate-udev
+
+[features]
+requires-root = []
+requires-uinput = []

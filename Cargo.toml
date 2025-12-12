@@ -4,6 +4,7 @@ members = [
     "cuse-lowlevel",
     "vuinputd",
     "vuinput-examples",
+    "vuinputd-tests",
 ]
 
 # Optional: force same version for all crates
