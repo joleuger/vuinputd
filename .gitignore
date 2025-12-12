@@ -1,0 +1,57 @@
+# Ignore build artifacts and editor files for this Rust workspace
+
+# Rust / Cargo
+/target/
+**/target/
+**/target/*
+**/debug/
+**/release/
+**/incremental/
+
+# Generated package crates / archives
+/package/
+/package/*
+
+# tarpaulin coverage output
+/tarpaulin/
+
+# VS Code and JetBrains
+.vscode/
+.idea/
+
+# Editor swap / backup files
+*~
+*.swp
+*.swo
+
+# macOS
+.DS_Store
+
+# Windows
+Thumbs.db
+
+# Temporary files
+/tmp/
+
+# Build artifacts
+*.o
+*.rlib
+*.so
+*.dylib
+*.dll
+*.exe
+
+# Coverage/profiler data
+*.profraw
+*.profdata
+
+# Environment files (optional)
+.env
+.env.local
+
+# Misc
+.cache/
+.cargo/
+
+# Debian build files
+ex/*
