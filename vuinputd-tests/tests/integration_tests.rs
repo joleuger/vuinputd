@@ -8,12 +8,14 @@ use vuinputd_tests::bwrap;
 #[cfg(all(feature = "requires-root", feature = "requires-bwrap"))]
 #[test]
 fn test_bwrap_simple() {
+    use std::vec;
+
     let out = bwrap::BwrapBuilder::new()
         .unshare_all()
         .ro_bind("/", "/")
         .tmpfs("/tmp")
         .die_with_parent()
-        .command("ls /")
+        .command("/usr/bin/echo",&["test","test","test"])
         .run()
         .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
 
@@ -23,7 +25,6 @@ fn test_bwrap_simple() {
 }
 
 #[cfg(all(feature = "requires-root", feature = "requires-bwrap"))]
-#[ignore]
 #[test]
 fn test_bwrap_ipc() {
     let bwrap_ipc = env!("CARGO_BIN_EXE_bwrap-ipc");
@@ -42,7 +43,7 @@ fn test_bwrap_ipc() {
         .unwrap_or_else(|e| panic!("failed to send data via ipc: {e}"));
 
     let out = builder
-        .command(bwrap_ipc)
+        .command(bwrap_ipc,&[])
         .run()
         .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
 
@@ -64,10 +65,9 @@ fn test_bwrap_ipc() {
 fn test_keyboard_in_container() {
     let keyboard_in_container = env!("CARGO_BIN_EXE_keyboard-in-container");
 
-    // Run the ns_child helper which unshares namespaces
     let status = Command::new(keyboard_in_container)
         .status()
-        .expect("failed to launch ns helper");
+        .expect("failed to launch keyboard-in-container");
 
     assert!(status.success());
 }

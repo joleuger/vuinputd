@@ -147,9 +147,10 @@ impl BwrapBuilder {
     }
 
     /// Final command executed inside the container.
-    pub fn command(mut self, cmd: &str) -> Self {
-        //self.args.push("--".into());
+    pub fn command(mut self, cmd: &str, args: &[&str]) -> Self {
+        self.args.push("--".into());
         self.args.push(cmd.into());
+        self.args.extend(args.iter().map(|s| s.to_string()));
         self
     }
 
@@ -198,7 +199,7 @@ mod tests {
             .ro_bind("/", "/")
             .tmpfs("/tmp")
             .die_with_parent()
-            .command("/usr/bin/sh")
+            .command("/usr/bin/echo",&[])
             .run()
             .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
 
