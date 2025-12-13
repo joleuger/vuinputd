@@ -1,4 +1,55 @@
-use std::process::Command;
+// SPDX-License-Identifier: MIT
+//
+// Author: Johannes Leupolz <dev@leupolz.eu>
+
+use std::{process::Command, time::Duration};
+use vuinputd_tests::bwrap;
+
+#[cfg(all(feature = "requires-root", feature = "requires-bwrap"))]
+#[test]
+fn test_bwrap_simple() {
+    let out = bwrap::BwrapBuilder::new()
+        .unshare_all()
+        .ro_bind("/", "/")
+        .tmpfs("/tmp")
+        .die_with_parent()
+        .command("ls /")
+        .run()
+        .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
+
+    println!("Output");
+    println!("stdout: {}", str::from_utf8(&out.stdout).unwrap());
+    println!("stderr: {}", str::from_utf8(&out.stderr).unwrap());
+}
+
+#[cfg(all(feature = "requires-root", feature = "requires-bwrap"))]
+#[ignore]
+#[test]
+fn test_bwrap_ipc() {
+    let bwrap_ipc = env!("CARGO_BIN_EXE_bwrap-ipc");
+
+    let (builder, ipc) = bwrap::BwrapBuilder::new()
+        .unshare_all()
+        .ro_bind("/", "/")
+        .tmpfs("/tmp")
+        .die_with_parent()
+        .with_ipc()
+        .expect("failed to create IPC");
+
+    let out = builder
+        .command(bwrap_ipc)
+        .run()
+        .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
+    ipc.send("continue".as_bytes())
+        .unwrap_or_else(|e| panic!("failed to send data via ipc: {e}"));
+
+    ipc.recv(Some(Duration::from_secs(5)))
+        .expect("error receiving input from ipc as host within 5 seconds");
+
+    println!("Output");
+    println!("stdout: {}", str::from_utf8(&out.stdout).unwrap());
+    println!("stderr: {}", str::from_utf8(&out.stderr).unwrap());
+}
 
 #[cfg(all(feature = "requires-root", feature = "requires-uinput"))]
 #[test]
