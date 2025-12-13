@@ -1,5 +1,5 @@
 use core::panic;
-use std::{str::from_utf8_unchecked, time::Duration};
+use std::{time::Duration};
 
 use vuinputd_tests::bwrap::SandboxChildIpc;
 
@@ -13,9 +13,11 @@ fn main() {
     let incoming_str =
         str::from_utf8(&incoming).expect("message received from ipc is not encoded as utf8");
     if incoming_str == "continue" {
+        println!("child received continue");
         ipc.send(b"ok").unwrap();
     } else {
         ipc.send(b"nok").unwrap();
+        println!("child received {}",incoming_str);
         panic!("expected ipc message to be 'continue'");
     }
 }

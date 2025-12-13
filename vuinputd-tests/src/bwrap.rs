@@ -3,7 +3,7 @@
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
 use std::io;
-use std::os::fd::{FromRawFd, IntoRawFd, RawFd};
+use std::os::fd::{FromRawFd, IntoRawFd, OwnedFd, RawFd};
 use std::os::unix::net::UnixDatagram;
 use std::os::unix::process::CommandExt;
 use std::process::{Command, Output};
@@ -76,7 +76,7 @@ impl SandboxChildIpc {
 #[derive(Default)]
 pub struct BwrapBuilder {
     args: Vec<String>,
-    ipc_child_fd: Option<RawFd>,
+    ipc_child_fd: Option<OwnedFd>,
 }
 
 impl BwrapBuilder {
@@ -141,7 +141,7 @@ impl BwrapBuilder {
         let parent_sock = unsafe { UnixDatagram::from_raw_fd(parent.into_raw_fd()) };
 
         // Child side must become FD 3 inside container
-        self.ipc_child_fd = Some(child.into_raw_fd());
+        self.ipc_child_fd = Some(child);
 
         Ok((self, SandboxIpc { sock: parent_sock }))
     }
@@ -158,7 +158,11 @@ impl BwrapBuilder {
 
         let mut cmd = Command::new("bwrap");
 
+
         if let Some(fd) = self.ipc_child_fd.take() {
+            // give up ownership of ipc_child_fd in host process.
+            let fd = fd.into_raw_fd();
+
             // Move child FD to 3. Note that the FD 3 needs to be linked at the
             // beginning of the child program.
             unsafe {

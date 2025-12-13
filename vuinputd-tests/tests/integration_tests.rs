@@ -36,19 +36,27 @@ fn test_bwrap_ipc() {
         .with_ipc()
         .expect("failed to create IPC");
 
+    // Note that builder.run() will block. Thus, the send needs to happen before the child process blocks
+    // the host process. 
+    ipc.send("continue".as_bytes())
+        .unwrap_or_else(|e| panic!("failed to send data via ipc: {e}"));
+
     let out = builder
         .command(bwrap_ipc)
         .run()
         .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
-    ipc.send("continue".as_bytes())
-        .unwrap_or_else(|e| panic!("failed to send data via ipc: {e}"));
 
-    ipc.recv(Some(Duration::from_secs(5)))
-        .expect("error receiving input from ipc as host within 5 seconds");
+    let result = ipc.recv(Some(Duration::from_secs(5)));
 
     println!("Output");
     println!("stdout: {}", str::from_utf8(&out.stdout).unwrap());
     println!("stderr: {}", str::from_utf8(&out.stderr).unwrap());
+
+    let result = result.expect("error receiving input from ipc as host within 5 seconds");
+    let result_str =
+    str::from_utf8(&result).expect("message received from ipc is not encoded as utf8");
+    println!("host received {}",result_str);
+
 }
 
 #[cfg(all(feature = "requires-root", feature = "requires-uinput"))]
