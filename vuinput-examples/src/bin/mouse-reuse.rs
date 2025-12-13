@@ -58,7 +58,7 @@ fn emit(fd: c_int, ev_type: i32, code: i32, val: i32) -> io::Result<()> {
 }
 
 fn main() -> io::Result<()> {
-    // open device - matches: open("/dev/uinput-test", O_WRONLY | O_NONBLOCK);
+    // open device - matches: open("/dev/uinput", O_WRONLY | O_NONBLOCK);
 
     let args: Vec<String> = std::env::args().collect();
     let device = match args.len() {

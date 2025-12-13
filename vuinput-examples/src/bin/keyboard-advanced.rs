@@ -305,8 +305,14 @@ fn emit(fd: c_int, ev_type: i32, code: i32, val: i32) -> io::Result<()> {
 }
 
 fn main() -> io::Result<()> {
-    // open device - matches: open("/dev/uinput-test", O_WRONLY | O_NONBLOCK);
-    let path = CString::new("/dev/uinput-test").unwrap();
+    // open device - matches: open("/dev/uinput", O_WRONLY | O_NONBLOCK);
+    let args: Vec<String> = std::env::args().collect();
+    let device = match args.len() {
+        2 => args[1].clone(),
+        _ => "/dev/uinput".to_string(),
+    };
+
+    let path = CString::new(device).unwrap();
     let fd = unsafe { open(path.as_ptr(), O_WRONLY | O_NONBLOCK) };
     if fd < 0 {
         eprintln!("error opening uinput");
