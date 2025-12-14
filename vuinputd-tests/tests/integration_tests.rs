@@ -95,7 +95,6 @@ fn test_keyboard_in_container_with_uinput() {
 }
 
 #[cfg(all(feature = "requires-root", feature = "requires-uinput", feature = "requires-bwrap"))]
-#[ignore]
 #[test]
 fn test_keyboard_in_container_with_vuinput() {
     println!("Note that vuinputd needs to run for this test");
@@ -105,6 +104,10 @@ fn test_keyboard_in_container_with_vuinput() {
         .unshare_net()
         .ro_bind("/", "/")
         .tmpfs("/tmp")
+        // dev needs to be writable for the new devices
+        .tmpfs("/dev")
+        // run needs to be writable for the udev devices
+        .tmpfs("/run")
         .dev_bind("/dev/vuinput", "/dev/uinput")
         .die_with_parent()
         .command(keyboard_in_container,&[])

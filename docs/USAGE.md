@@ -235,6 +235,15 @@ Sample output from `journalctl` showing vuinputd output:
 | Device appears on host seat | udev rules not isolating             | Add udev rules from vuinputd/udev-folder     |
 | Input delayed or missing    | CUSE layer error                     | Check host logs via `journalctl -u vuinputd`      |
 
+
+```
+Dez 14 21:33:17 wohnzimmer vuinputd[2172719]: Create /dev/input
+Dez 14 21:33:17 wohnzimmer vuinputd[2172719]: [2025-12-14T21:33:17Z DEBUG vuinputd::jobs::inject_in_container_job] Error creating input device /dev/input/event12: Read-o>
+Dez 14 21:33:17 wohnzimmer vuinputd[2172719]: thread '<unnamed>' panicked at vuinputd/src/jobs/inject_in_container_job.rs:161:41:
+Dez 14 21:33:17 wohnzimmer vuinputd[2172719]: called `Result::unwrap()` on an `Err` value: Os { code: 30, kind: ReadOnlyFilesystem, message: "Read-only file system" }
+```
+
+Ensure /dev and /run are writable in the container. If in doubt, use tmpfs.
 ---
 
 ## 8. Notes and Advanced Topics
