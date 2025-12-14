@@ -118,6 +118,11 @@ impl BwrapBuilder {
         self
     }
 
+    pub fn dev_bind(mut self, src: &str, dst: &str) -> Self {
+        self.args.extend(["--dev-bind".into(), src.into(), dst.into()]);
+        self
+    }
+
     /// Ensure the container dies if the parent dies.
     ///
     /// This uses bwrap's `--die-with-parent` flag, which internally

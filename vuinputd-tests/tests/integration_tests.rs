@@ -8,8 +8,6 @@ use vuinputd_tests::bwrap;
 #[cfg(all(feature = "requires-root", feature = "requires-bwrap"))]
 #[test]
 fn test_bwrap_simple() {
-    use std::vec;
-
     let out = bwrap::BwrapBuilder::new()
         .unshare_all()
         .ro_bind("/", "/")
@@ -60,9 +58,10 @@ fn test_bwrap_ipc() {
 
 }
 
+
 #[cfg(all(feature = "requires-root", feature = "requires-uinput"))]
 #[test]
-fn test_keyboard_in_container() {
+fn test_keyboard_on_host() {
     let keyboard_in_container = env!("CARGO_BIN_EXE_keyboard-in-container");
 
     let status = Command::new(keyboard_in_container)
@@ -70,4 +69,51 @@ fn test_keyboard_in_container() {
         .expect("failed to launch keyboard-in-container");
 
     assert!(status.success());
+}
+
+
+#[cfg(all(feature = "requires-root", feature = "requires-uinput", feature = "requires-bwrap"))]
+#[test]
+fn test_keyboard_in_container_with_uinput() {
+    let keyboard_in_container = env!("CARGO_BIN_EXE_keyboard-in-container");
+    
+    let out = bwrap::BwrapBuilder::new()
+        .unshare_net()
+        .ro_bind("/", "/")
+        .tmpfs("/tmp")
+        .dev_bind("/dev/uinput", "/dev/uinput")
+        .die_with_parent()
+        .command(keyboard_in_container,&[])
+        .run()
+        .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
+
+    println!("Output");
+    println!("stdout: {}", str::from_utf8(&out.stdout).unwrap());
+    println!("stderr: {}", str::from_utf8(&out.stderr).unwrap());
+
+    assert!(out.status.success());
+}
+
+#[cfg(all(feature = "requires-root", feature = "requires-uinput", feature = "requires-bwrap"))]
+#[ignore]
+#[test]
+fn test_keyboard_in_container_with_vuinput() {
+    println!("Note that vuinputd needs to run for this test");
+    let keyboard_in_container = env!("CARGO_BIN_EXE_keyboard-in-container");
+    
+    let out = bwrap::BwrapBuilder::new()
+        .unshare_net()
+        .ro_bind("/", "/")
+        .tmpfs("/tmp")
+        .dev_bind("/dev/vuinput", "/dev/uinput")
+        .die_with_parent()
+        .command(keyboard_in_container,&[])
+        .run()
+        .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
+
+    println!("Output");
+    println!("stdout: {}", str::from_utf8(&out.stdout).unwrap());
+    println!("stderr: {}", str::from_utf8(&out.stderr).unwrap());
+
+    assert!(out.status.success());
 }
