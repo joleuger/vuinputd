@@ -4,6 +4,7 @@
 
 use std::{process::Command, time::Duration};
 use vuinputd_tests::bwrap;
+use vuinputd_tests::run_vuinputd;
 
 #[cfg(all(feature = "requires-root", feature = "requires-bwrap"))]
 #[test]
@@ -97,7 +98,8 @@ fn test_keyboard_in_container_with_uinput() {
 #[cfg(all(feature = "requires-root", feature = "requires-uinput", feature = "requires-bwrap"))]
 #[test]
 fn test_keyboard_in_container_with_vuinput() {
-    println!("Note that vuinputd needs to run for this test");
+    run_vuinputd::ensure_vuinputd_running();
+    
     let keyboard_in_container = env!("CARGO_BIN_EXE_keyboard-in-container");
     
     let out = bwrap::BwrapBuilder::new()
@@ -108,7 +110,7 @@ fn test_keyboard_in_container_with_vuinput() {
         .tmpfs("/dev")
         // run needs to be writable for the udev devices
         .tmpfs("/run")
-        .dev_bind("/dev/vuinput", "/dev/uinput")
+        .dev_bind("/dev/vuinput-test", "/dev/uinput")
         .die_with_parent()
         .command(keyboard_in_container,&[])
         .run()
