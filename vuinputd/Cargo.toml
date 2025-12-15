@@ -26,3 +26,4 @@ async-channel = "2.5.0"
 futures = "0.3.31"
 async-io = "2.6.0"
 anyhow = "1.0.100"
+clap = { version = "4", features = ["derive"] }

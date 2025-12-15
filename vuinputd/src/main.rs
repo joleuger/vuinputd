@@ -39,12 +39,64 @@ use crate::process_tools::*;
 
 pub mod jobs;
 
+use clap::Parser;
+
+const DEV_PREFIX: &str = "/dev/";
+const DEVNAME_MAX_LEN: usize = 128 - DEV_PREFIX.len();
+
+#[derive(Debug, Parser)]
+#[command(author, version, about)]
+struct Args {
+    /// Major device number
+    #[arg(long)]
+    major: Option<u32>,
+
+    /// Minor device number
+    #[arg(long)]
+    minor: Option<u32>,
+
+    /// Device name (without /dev/)
+    #[arg(long)]
+    devname: Option<String>,
+}
+
+fn validate_args(args: &Args) -> Result<(), String> {
+    // major/minor must appear together
+    match (&args.major, &args.minor) {
+        (Some(_), Some(_)) | (None, None) => {}
+        _ => {
+            return Err(
+                "--major and --minor must be specified together or not at all".into(),
+            );
+        }
+    }
+
+    // devname length constraint
+    if let Some(devname) = &args.devname {
+        if devname.len() >= DEVNAME_MAX_LEN {
+            return Err(format!(
+                "--devname must be shorter than {} bytes",
+                DEVNAME_MAX_LEN
+            ));
+        }
+    }
+
+    Ok(())
+}
+
 fn main() -> std::io::Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug")).init();
 
     check_permissions().expect("failed to read the capabilities of the vuinputd process");
 
-    let args: Vec<String> = std::env::args().collect();
+    let args = Args::parse();
+    let argv0 = std::env::args_os().next().expect("Couldn't retrieve program name");
+
+    if let Err(e) = validate_args(&args) {
+        eprintln!("Error: {e}");
+        std::process::exit(2);
+    }
+
 
     initialize_vuinput_state();
     VUINPUT_COUNTER.set(AtomicU64::new(3)).expect(
@@ -68,7 +120,11 @@ fn main() -> std::io::Result<()> {
 
     let cuse_ops = vuinput_make_cuse_ops();
 
-    let vuinput_devicename = CString::new(format!("DEVNAME=vuinput")).unwrap();
+    let vuinput_devicename = match &args.devname {
+        None => "vuinput",
+        Some(devname) => devname
+    };
+    let vuinput_devicename = CString::new(format!("DEVNAME={}",vuinput_devicename)).unwrap();
 
     let mut dev_info_argv: Vec<*const c_char> = vec![
         vuinput_devicename.as_ptr(), // pointer to the C string
@@ -77,17 +133,19 @@ fn main() -> std::io::Result<()> {
 
     // setting dev_major and dev_minor to 0 leads to a dynamic assignment of the major and minor, very likely beginning with 234:0
     // see  in https://www.kernel.org/doc/Documentation/admin-guide/devices.txt
-    // major 120 is reserved for local/experimental use. I picked minor 414795 with the use
-    // of a random number generator to omit conflicts.
+    let (major,minor) = match ((&args).major, (&args).minor) {
+        (Some(major), Some(minor)) => (major,minor),
+        _ => (0,0)
+    };
     let ci = cuse_lowlevel::cuse_info {
-        dev_major: 120,
-        dev_minor: 414795,
+        dev_major: major,
+        dev_minor: minor,
         dev_info_argc: 1,
         dev_info_argv: dev_info_argv.as_mut_ptr(),
         flags: cuse_lowlevel::CUSE_UNRESTRICTED_IOCTL,
     };
 
-    let arg_program_name = CString::new(args[0].clone()).unwrap();
+    let arg_program_name = CString::new(argv0.as_encoded_bytes()).unwrap();
     let parg_program_name = arg_program_name.into_raw();
     let arg_foreground = CString::new("-f").unwrap();
     let parg_foreground = arg_foreground.into_raw();

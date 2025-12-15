@@ -21,6 +21,7 @@ Build-Depends: debhelper (>= 12),
  librust-futures-dev,  
  librust-async-io-dev,
  librust-anyhow-dev,
+ librust-clap-dev,
  pkg-config,  
  build-essential
 Standards-Version: 4.6.0

@@ -4,7 +4,9 @@ After=systemd-udevd.service
 Requires=systemd-udevd.service
 
 [Service]
-ExecStart=/usr/local/bin/vuinputd
+# major 120 is reserved for local/experimental use. I picked minor 414795 with the use
+# of a random number generator to omit conflicts.
+ExecStart=/usr/local/bin/vuinputd --major 120 --minor 414795
 Restart=on-failure
 
 # Needs CAP_SYS_ADMIN for CUSE + /dev/uinput (I am still missing a capability for the correct working mode)
