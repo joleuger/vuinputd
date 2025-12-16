@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [[bin]]
-name = "keyboard-in-container"
+name = "test-keyboard"
 
 [[bin]]
 name = "bwrap-ipc"
@@ -17,6 +17,6 @@ libudev = "0.3" # enumerate-udev
 vuinputd = { path = "../vuinputd" }
 
 [features]
-requires-root = []
+requires-privileges = []
 requires-uinput = []
 requires-bwrap = []

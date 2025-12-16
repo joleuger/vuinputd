@@ -6,7 +6,7 @@ use std::{process::Command, time::Duration};
 use vuinputd_tests::bwrap;
 use vuinputd_tests::run_vuinputd;
 
-#[cfg(all(feature = "requires-root", feature = "requires-bwrap"))]
+#[cfg(all(feature = "requires-privileges", feature = "requires-bwrap"))]
 #[test]
 fn test_bwrap_simple() {
     let out = bwrap::BwrapBuilder::new()
@@ -23,7 +23,7 @@ fn test_bwrap_simple() {
     println!("stderr: {}", str::from_utf8(&out.stderr).unwrap());
 }
 
-#[cfg(all(feature = "requires-root", feature = "requires-bwrap"))]
+#[cfg(all(feature = "requires-privileges", feature = "requires-bwrap"))]
 #[test]
 fn test_bwrap_ipc() {
     let bwrap_ipc = env!("CARGO_BIN_EXE_bwrap-ipc");
@@ -60,12 +60,12 @@ fn test_bwrap_ipc() {
 }
 
 
-#[cfg(all(feature = "requires-root", feature = "requires-uinput"))]
+#[cfg(all(feature = "requires-privileges", feature = "requires-uinput"))]
 #[test]
 fn test_keyboard_on_host() {
-    let keyboard_in_container = env!("CARGO_BIN_EXE_keyboard-in-container");
+    let test_keyboard = env!("CARGO_BIN_EXE_test-keyboard");
 
-    let status = Command::new(keyboard_in_container)
+    let status = Command::new(test_keyboard)
         .status()
         .expect("failed to launch keyboard-in-container");
 
@@ -73,10 +73,10 @@ fn test_keyboard_on_host() {
 }
 
 
-#[cfg(all(feature = "requires-root", feature = "requires-uinput", feature = "requires-bwrap"))]
+#[cfg(all(feature = "requires-privileges", feature = "requires-uinput", feature = "requires-bwrap"))]
 #[test]
 fn test_keyboard_in_container_with_uinput() {
-    let keyboard_in_container = env!("CARGO_BIN_EXE_keyboard-in-container");
+    let test_keyboard = env!("CARGO_BIN_EXE_test-keyboard");
     
     let out = bwrap::BwrapBuilder::new()
         .unshare_net()
@@ -84,7 +84,7 @@ fn test_keyboard_in_container_with_uinput() {
         .tmpfs("/tmp")
         .dev_bind("/dev/uinput", "/dev/uinput")
         .die_with_parent()
-        .command(keyboard_in_container,&[])
+        .command(test_keyboard,&[])
         .run()
         .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
 
@@ -95,12 +95,12 @@ fn test_keyboard_in_container_with_uinput() {
     assert!(out.status.success());
 }
 
-#[cfg(all(feature = "requires-root", feature = "requires-uinput", feature = "requires-bwrap"))]
+#[cfg(all(feature = "requires-privileges", feature = "requires-uinput", feature = "requires-bwrap"))]
 #[test]
 fn test_keyboard_in_container_with_vuinput() {
     run_vuinputd::ensure_vuinputd_running();
     
-    let keyboard_in_container = env!("CARGO_BIN_EXE_keyboard-in-container");
+    let test_keyboard = env!("CARGO_BIN_EXE_test-keyboard");
     
     let out = bwrap::BwrapBuilder::new()
         .unshare_net()
@@ -112,7 +112,7 @@ fn test_keyboard_in_container_with_vuinput() {
         .tmpfs("/run")
         .dev_bind("/dev/vuinput-test", "/dev/uinput")
         .die_with_parent()
-        .command(keyboard_in_container,&[])
+        .command(test_keyboard,&[])
         .run()
         .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
 

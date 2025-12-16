@@ -5,7 +5,7 @@
 Install bubblewrap:
 `apt-get install bubblewrap`.
 
-Run with `cargo test -p vuinputd-tests --features "requires-root requires-uinput requires-bwrap"`.
+Run with `cargo test -p vuinputd-tests --features "requires-privileges requires-uinput requires-bwrap"`.
 
 ## Manual end-to-end tests
 
