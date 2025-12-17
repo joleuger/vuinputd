@@ -2,11 +2,15 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
-use libc::uinput_setup;
+use clap::Parser;
+use libc::{CLOCK_MONOTONIC, input_event, timespec, uinput_setup};
 use libc::{c_int, close, open, write, O_NONBLOCK, O_WRONLY};
+use vuinputd_tests::test_log::{LoggedInputEvent, TestLog};
 use std::ffi::{CStr, CString};
-use std::io;
-use std::mem::{size_of, zeroed};
+use std::fs::{self, File, OpenOptions};
+use std::io::{self, ErrorKind};
+use std::mem::{self, size_of, zeroed};
+use std::os::fd::AsRawFd;
 use std::os::raw::{c_char, c_void};
 use std::ptr;
 use std::thread::sleep;
@@ -14,128 +18,130 @@ use std::time::Duration;
 pub use uinput_ioctls::*;
 
 // Constants (same numeric values as in linux headers)
-const EV_SYN: i32 = 0x00;
-const EV_KEY: i32 = 0x01;
-const SYN_REPORT: i32 = 0;
+const EV_SYN: u16 = 0x00;
+const EV_KEY: u16 = 0x01;
+const SYN_REPORT: u16 = 0;
 const BUS_USB: u16 = 0x03;
 
 /// Key codes. Those are used by udev to recognize a device as a keyboard.
-const KEY_ESC: i32 = 1;
-const KEY_1: i32 = 2;
-const KEY_2: i32 = 3;
-const KEY_3: i32 = 4;
-const KEY_4: i32 = 5;
-const KEY_5: i32 = 6;
-const KEY_6: i32 = 7;
-const KEY_7: i32 = 8;
-const KEY_8: i32 = 9;
-const KEY_9: i32 = 10;
-const KEY_0: i32 = 11;
-const KEY_MINUS: i32 = 12;
-const KEY_EQUAL: i32 = 13;
-const KEY_BACKSPACE: i32 = 14;
-const KEY_TAB: i32 = 15;
-const KEY_Q: i32 = 16;
-const KEY_W: i32 = 17;
-const KEY_E: i32 = 18;
-const KEY_R: i32 = 19;
-const KEY_T: i32 = 20;
-const KEY_Y: i32 = 21;
-const KEY_U: i32 = 22;
-const KEY_I: i32 = 23;
-const KEY_O: i32 = 24;
-const KEY_P: i32 = 25;
-const KEY_LEFTBRACE: i32 = 26;
-const KEY_RIGHTBRACE: i32 = 27;
-const KEY_ENTER: i32 = 28;
-const KEY_LEFTCTRL: i32 = 29;
-const KEY_A: i32 = 30;
-const KEY_S: i32 = 31;
+const KEY_ESC: u16 = 1;
+const KEY_1: u16 = 2;
+const KEY_2: u16 = 3;
+const KEY_3: u16 = 4;
+const KEY_4: u16 = 5;
+const KEY_5: u16 = 6;
+const KEY_6: u16 = 7;
+const KEY_7: u16 = 8;
+const KEY_8: u16 = 9;
+const KEY_9: u16 = 10;
+const KEY_0: u16 = 11;
+const KEY_MINUS: u16 = 12;
+const KEY_EQUAL: u16 = 13;
+const KEY_BACKSPACE: u16 = 14;
+const KEY_TAB: u16 = 15;
+const KEY_Q: u16 = 16;
+const KEY_W: u16 = 17;
+const KEY_E: u16 = 18;
+const KEY_R: u16 = 19;
+const KEY_T: u16 = 20;
+const KEY_Y: u16 = 21;
+const KEY_U: u16 = 22;
+const KEY_I: u16 = 23;
+const KEY_O: u16 = 24;
+const KEY_P: u16 = 25;
+const KEY_LEFTBRACE: u16 = 26;
+const KEY_RIGHTBRACE: u16 = 27;
+const KEY_ENTER: u16 = 28;
+const KEY_LEFTCTRL: u16 = 29;
+const KEY_A: u16 = 30;
+const KEY_S: u16 = 31;
 
 /// Space and other common keys
-const KEY_D: i32 = 32;
-const KEY_F: i32 = 33;
-const KEY_G: i32 = 34;
-const KEY_H: i32 = 35;
-const KEY_J: i32 = 36;
-const KEY_K: i32 = 37;
-const KEY_L: i32 = 38;
-const KEY_SEMICOLON: i32 = 39;
-const KEY_APOSTROPHE: i32 = 40;
-const KEY_GRAVE: i32 = 41;
-const KEY_LEFTSHIFT: i32 = 42;
-const KEY_BACKSLASH: i32 = 43;
-const KEY_Z: i32 = 44;
-const KEY_X: i32 = 45;
-const KEY_C: i32 = 46;
-const KEY_V: i32 = 47;
-const KEY_B: i32 = 48;
-const KEY_N: i32 = 49;
-const KEY_M: i32 = 50;
-const KEY_COMMA: i32 = 51;
-const KEY_DOT: i32 = 52;
-const KEY_SLASH: i32 = 53;
-const KEY_RIGHTSHIFT: i32 = 54;
-const KEY_KPASTERISK: i32 = 55;
-const KEY_LEFTALT: i32 = 56;
-const KEY_SPACE: i32 = 57;
-const KEY_CAPSLOCK: i32 = 58;
+const KEY_D: u16 = 32;
+const KEY_F: u16 = 33;
+const KEY_G: u16 = 34;
+const KEY_H: u16 = 35;
+const KEY_J: u16 = 36;
+const KEY_K: u16 = 37;
+const KEY_L: u16 = 38;
+const KEY_SEMICOLON: u16 = 39;
+const KEY_APOSTROPHE: u16 = 40;
+const KEY_GRAVE: u16 = 41;
+const KEY_LEFTSHIFT: u16 = 42;
+const KEY_BACKSLASH: u16 = 43;
+const KEY_Z: u16 = 44;
+const KEY_X: u16 = 45;
+const KEY_C: u16 = 46;
+const KEY_V: u16 = 47;
+const KEY_B: u16 = 48;
+const KEY_N: u16 = 49;
+const KEY_M: u16 = 50;
+const KEY_COMMA: u16 = 51;
+const KEY_DOT: u16 = 52;
+const KEY_SLASH: u16 = 53;
+const KEY_RIGHTSHIFT: u16 = 54;
+const KEY_KPASTERISK: u16 = 55;
+const KEY_LEFTALT: u16 = 56;
+const KEY_SPACE: u16 = 57;
+const KEY_CAPSLOCK: u16 = 58;
 
 /// Function keys
-const KEY_F1: i32 = 59;
-const KEY_F2: i32 = 60;
-const KEY_F3: i32 = 61;
-const KEY_F4: i32 = 62;
-const KEY_F5: i32 = 63;
-const KEY_F6: i32 = 64;
-const KEY_F7: i32 = 65;
-const KEY_F8: i32 = 66;
-const KEY_F9: i32 = 67;
-const KEY_F10: i32 = 68;
-const KEY_NUMLOCK: i32 = 69;
-const KEY_SCROLLLOCK: i32 = 70;
-const KEY_KP7: i32 = 71;
-const KEY_KP8: i32 = 72;
-const KEY_KP9: i32 = 73;
-const KEY_KPMINUS: i32 = 74;
-const KEY_KP4: i32 = 75;
-const KEY_KP5: i32 = 76;
-const KEY_KP6: i32 = 77;
-const KEY_KPPLUS: i32 = 78;
-const KEY_KP1: i32 = 79;
-const KEY_KP2: i32 = 80;
-const KEY_KP3: i32 = 81;
-const KEY_KP0: i32 = 82;
-const KEY_KPDOT: i32 = 83;
+const KEY_F1: u16 = 59;
+const KEY_F2: u16 = 60;
+const KEY_F3: u16 = 61;
+const KEY_F4: u16 = 62;
+const KEY_F5: u16 = 63;
+const KEY_F6: u16 = 64;
+const KEY_F7: u16 = 65;
+const KEY_F8: u16 = 66;
+const KEY_F9: u16 = 67;
+const KEY_F10: u16 = 68;
+const KEY_NUMLOCK: u16 = 69;
+const KEY_SCROLLLOCK: u16 = 70;
+const KEY_KP7: u16 = 71;
+const KEY_KP8: u16 = 72;
+const KEY_KP9: u16 = 73;
+const KEY_KPMINUS: u16 = 74;
+const KEY_KP4: u16 = 75;
+const KEY_KP5: u16 = 76;
+const KEY_KP6: u16 = 77;
+const KEY_KPPLUS: u16 = 78;
+const KEY_KP1: u16 = 79;
+const KEY_KP2: u16 = 80;
+const KEY_KP3: u16 = 81;
+const KEY_KP0: u16 = 82;
+const KEY_KPDOT: u16 = 83;
 
 /// Arrow keys and navigation
-const KEY_ZENKAKUHANKAKU: i32 = 85;
-const KEY_102ND: i32 = 86;
-const KEY_F11: i32 = 87;
-const KEY_F12: i32 = 88;
-const KEY_RO: i32 = 89;
-const KEY_KATAKANA: i32 = 90;
-const KEY_HIRAGANA: i32 = 91;
-const KEY_HENKAN: i32 = 92;
-const KEY_KATAKANAHIRAGANA: i32 = 93;
-const KEY_MUHENKAN: i32 = 94;
-const KEY_KPJPCOMMA: i32 = 95;
-const KEY_KPENTER: i32 = 96;
-const KEY_RIGHTCTRL: i32 = 97;
-const KEY_KPSLASH: i32 = 98;
-const KEY_SYSRQ: i32 = 99;
-const KEY_RIGHTALT: i32 = 100;
-const KEY_LINEFEED: i32 = 101;
-const KEY_HOME: i32 = 102;
-const KEY_UP: i32 = 103;
-const KEY_PAGEUP: i32 = 104;
-const KEY_LEFT: i32 = 105;
-const KEY_RIGHT: i32 = 106;
-const KEY_END: i32 = 107;
-const KEY_DOWN: i32 = 108;
-const KEY_PAGEDOWN: i32 = 109;
-const KEY_INSERT: i32 = 110;
-const KEY_DELETE: i32 = 111;
+const KEY_ZENKAKUHANKAKU: u16 = 85;
+const KEY_102ND: u16 = 86;
+const KEY_F11: u16 = 87;
+const KEY_F12: u16 = 88;
+const KEY_RO: u16 = 89;
+const KEY_KATAKANA: u16 = 90;
+const KEY_HIRAGANA: u16 = 91;
+const KEY_HENKAN: u16 = 92;
+const KEY_KATAKANAHIRAGANA: u16 = 93;
+const KEY_MUHENKAN: u16 = 94;
+const KEY_KPJPCOMMA: u16 = 95;
+const KEY_KPENTER: u16 = 96;
+const KEY_RIGHTCTRL: u16 = 97;
+const KEY_KPSLASH: u16 = 98;
+const KEY_SYSRQ: u16 = 99;
+const KEY_RIGHTALT: u16 = 100;
+const KEY_LINEFEED: u16 = 101;
+const KEY_HOME: u16 = 102;
+const KEY_UP: u16 = 103;
+const KEY_PAGEUP: u16 = 104;
+const KEY_LEFT: u16 = 105;
+const KEY_RIGHT: u16 = 106;
+const KEY_END: u16 = 107;
+const KEY_DOWN: u16 = 108;
+const KEY_PAGEDOWN: u16 = 109;
+const KEY_INSERT: u16 = 110;
+const KEY_DELETE: u16 = 111;
+
+const SYS_INPUT_DIR: &str = "/sys/devices/virtual/input/";
 
 /// Configure a full 101-key standard keyboard
 unsafe fn set_standard_keyboard_keys(fd: i32) -> Result<(), std::io::Error> {
@@ -272,7 +278,20 @@ unsafe fn set_standard_keyboard_keys(fd: i32) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-fn emit(fd: c_int, ev_type: i32, code: i32, val: i32) -> io::Result<()> {
+
+#[derive(Debug, Parser)]
+#[command(author, version, about)]
+struct Args {
+    /// Use IPC
+    #[arg(long, default_value_t = false)]
+    ipc: bool,
+
+    /// Device path (with /dev/)
+    #[arg(long)]
+    dev_path: Option<String>,
+}
+
+fn emit(fd: c_int, ev_type: u16, code: u16, val: i32) -> io::Result<()> {
     // libc's input_event struct layout:
     // struct input_event {
     //   struct timeval time;
@@ -288,10 +307,9 @@ fn emit(fd: c_int, ev_type: i32, code: i32, val: i32) -> io::Result<()> {
     ie.time.tv_sec = 0;
     ie.time.tv_usec = 0;
 
-    // input_event fields: type and code are u16 in C; value is i32
-    ie.type_ = ev_type as u16; // note: in libc the field is `type_`
-    ie.code = code as u16;
-    ie.value = val as i32;
+    ie.type_ = ev_type; // note: in libc the field is `type_`
+    ie.code = code;
+    ie.value = val;
 
     // write the struct to the uinput fd
     let buf_ptr = &ie as *const libc::input_event as *const c_void;
@@ -304,11 +322,76 @@ fn emit(fd: c_int, ev_type: i32, code: i32, val: i32) -> io::Result<()> {
     Ok(())
 }
 
+
+fn emit_read_and_log(emit_to: c_int, read_from:&File, ev_type: u16, code: u16, val: i32) -> io::Result<LoggedInputEvent> {
+    let (time_sent_sec,time_sent_nsec) = monotonic_time();
+    emit(emit_to, ev_type, code, val)?;
+    let input_event_recv=read_event(&read_from).unwrap();
+    let (time_recv_sec,time_recv_nsec) = monotonic_time();
+    let duration_nsec =(time_recv_sec-time_sent_sec)*1_000_000+(time_recv_nsec-time_sent_nsec)/1000;
+    let send_and_receive_match = input_event_recv.type_==ev_type && input_event_recv.code==code && input_event_recv.value==val;
+
+    Ok(LoggedInputEvent {
+        tv_sec: time_sent_sec,
+        tv_usec: time_sent_nsec,
+        duration_nsec: duration_nsec,
+        type_: ev_type,
+        code: code,
+        value: val,
+        send_and_receive_match: send_and_receive_match
+    })
+}
+
+
+pub fn fetch_device_node(path: &str) -> io::Result<String> {
+    println!("Read dir {}",&path);
+    for entry in fs::read_dir(path)? {
+        let entry = entry?; // propagate per-entry errors
+        if let Some(name) = entry.file_name().to_str() {
+            if name.starts_with("event") {
+                return Ok(format!("/dev/input/{}", name));
+            }
+        }
+    }
+    // If no device is found, return an error
+    Err(io::Error::new(ErrorKind::NotFound, "no device found"))
+}
+
+pub fn read_event(event_dev : &File) -> io::Result<input_event> {
+
+    let mut ev: input_event = unsafe { mem::zeroed() };/*
+    let ret = unsafe {
+            libc::read(
+                event_dev.as_raw_fd(),
+                &mut ev as *mut _ as *mut c_void,
+                mem::size_of::<input_event>(),
+            )
+        };
+    if ret as usize != mem::size_of::<input_event>() {
+        return Err(io::Error::last_os_error());
+    }*/
+    Ok(ev)
+}
+
+fn monotonic_time() -> (i64,i64) {
+    let mut ts = timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+
+    unsafe {
+        libc::clock_gettime(CLOCK_MONOTONIC, &mut ts);
+    }
+    (ts.tv_sec ,ts.tv_nsec)
+}
+
+
 fn main() -> io::Result<()> {
     // open device - matches: open("/dev/uinput", O_WRONLY | O_NONBLOCK);
-    let args: Vec<String> = std::env::args().collect();
-    let device = match args.len() {
-        2 => args[1].clone(),
+    let args=Args::parse();
+
+    let device = match args.dev_path {
+        Some(dev_path) => dev_path,
         _ => "/dev/uinput".to_string(),
     };
 
@@ -374,22 +457,36 @@ fn main() -> io::Result<()> {
             std::process::exit(1);
         });
 
+        // Sleep 2 second to allow userspace to detect the device (same as C example)
+        sleep(Duration::from_secs(2));
+
         let mut resultbuf: [c_char; 64] = [0; 64];
-        ui_get_sysname(fd, &mut resultbuf).unwrap();
-        let sysname = CStr::from_ptr(resultbuf.as_ptr()).to_string_lossy();
+        ui_get_sysname(fd, resultbuf.as_mut_slice()).unwrap();
+        let sysname = format!(
+            "{}{}",
+            SYS_INPUT_DIR,
+            CStr::from_ptr(resultbuf.as_ptr()).to_string_lossy()
+        );
+        println!("syspath: {}", sysname);
+        let devnode = fetch_device_node(&sysname).unwrap_or_else(|e| panic!("failed to fetch device node!: {e}"));
+        println!("devnode: {}", devnode);
+
         eprintln!("sysname: {}", sysname);
 
-        // Sleep 1 second to allow userspace to detect the device (same as C example)
-        sleep(Duration::from_secs(1));
+        let event_device = OpenOptions::new()
+        .read(true)
+        .open(&devnode)
+        .unwrap_or_else(|err| panic!("Could not open event device {}, Error {}",&devnode,err));
 
         // Emit press + syn + release + syn
-        emit(fd, EV_KEY, KEY_SPACE, 1)?;
-        emit(fd, EV_SYN, SYN_REPORT, 0)?;
-        emit(fd, EV_KEY, KEY_SPACE, 0)?;
-        emit(fd, EV_SYN, SYN_REPORT, 0)?;
+        let ev1 = emit_read_and_log(fd, &event_device, EV_KEY, KEY_SPACE, 1)?;
+        let ev2 = emit_read_and_log(fd, &event_device,EV_SYN, SYN_REPORT, 0)?;
+        let ev3 = emit_read_and_log(fd, &event_device,EV_KEY, KEY_SPACE, 0)?;
+        let ev4 = emit_read_and_log(fd, &event_device,EV_SYN, SYN_REPORT, 0)?;
 
-        // Give userspace time to read events
-        sleep(Duration::from_secs(2));
+        let eventlog = TestLog{events:vec![ev1,ev2,ev3,ev4]};
+        let serialized = serde_json::to_string(&eventlog).unwrap();
+        println!("Event log: {}",serialized);
 
         // Destroy device and close fd
         ui_dev_destroy(fd).unwrap_or_else(|e| {

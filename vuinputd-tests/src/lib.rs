@@ -4,3 +4,4 @@
 
 pub mod bwrap;
 pub mod run_vuinputd;
+pub mod test_log;

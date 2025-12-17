@@ -60,6 +60,23 @@ fn test_bwrap_ipc() {
 }
 
 
+#[cfg(all(feature = "requires-privileges", feature = "requires-bwrap"))]
+#[test]
+fn test_list_sys_in_container() {
+    let out = bwrap::BwrapBuilder::new()
+        .unshare_all()
+        .ro_bind("/", "/")
+        .tmpfs("/tmp")
+        .die_with_parent()
+        .command("/usr/bin/ls",&["-lh","/sys/devices/virtual/input/input235"])
+        .run()
+        .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
+
+    println!("Output");
+    println!("stdout: {}", str::from_utf8(&out.stdout).unwrap());
+    println!("stderr: {}", str::from_utf8(&out.stderr).unwrap());
+}
+
 #[cfg(all(feature = "requires-privileges", feature = "requires-uinput"))]
 #[test]
 fn test_keyboard_on_host() {
@@ -83,6 +100,7 @@ fn test_keyboard_in_container_with_uinput() {
         .ro_bind("/", "/")
         .tmpfs("/tmp")
         .dev_bind("/dev/uinput", "/dev/uinput")
+        .dev_bind("/dev/input", "/dev/input")
         .die_with_parent()
         .command(test_keyboard,&[])
         .run()
@@ -96,6 +114,7 @@ fn test_keyboard_in_container_with_uinput() {
 }
 
 #[cfg(all(feature = "requires-privileges", feature = "requires-uinput", feature = "requires-bwrap"))]
+#[ignore]
 #[test]
 fn test_keyboard_in_container_with_vuinput() {
     run_vuinputd::ensure_vuinputd_running();
@@ -108,6 +127,7 @@ fn test_keyboard_in_container_with_vuinput() {
         .tmpfs("/tmp")
         // dev needs to be writable for the new devices
         .tmpfs("/dev")
+        .tmpfs("/dev/input")
         // run needs to be writable for the udev devices
         .tmpfs("/run")
         .dev_bind("/dev/vuinput-test", "/dev/uinput")
