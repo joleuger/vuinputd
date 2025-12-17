@@ -315,7 +315,9 @@ fn emit(fd: c_int, ev_type: u16, code: u16, val: i32) -> io::Result<()> {
     let buf_ptr = &ie as *const libc::input_event as *const c_void;
     let bytes = size_of::<libc::input_event>();
 
+    //println!("write to {} {} {} {} ",fd,ev_type,code,val);
     let written = unsafe { write(fd, buf_ptr, bytes) };
+    //println!("written");
     if written as usize != bytes {
         return Err(io::Error::last_os_error());
     }
@@ -323,10 +325,13 @@ fn emit(fd: c_int, ev_type: u16, code: u16, val: i32) -> io::Result<()> {
 }
 
 
+// Note that before we can read, a SYN needs to be sent. Thus combine it.
 fn emit_read_and_log(emit_to: c_int, read_from:&File, ev_type: u16, code: u16, val: i32) -> io::Result<LoggedInputEvent> {
     let (time_sent_sec,time_sent_nsec) = monotonic_time();
     emit(emit_to, ev_type, code, val)?;
+    emit(emit_to,EV_SYN, SYN_REPORT, 0)?;
     let input_event_recv=read_event(&read_from).unwrap();
+    let _syn_recv=read_event(&read_from).unwrap();
     let (time_recv_sec,time_recv_nsec) = monotonic_time();
     let duration_nsec =(time_recv_sec-time_sent_sec)*1_000_000+(time_recv_nsec-time_sent_nsec)/1000;
     let send_and_receive_match = input_event_recv.type_==ev_type && input_event_recv.code==code && input_event_recv.value==val;
@@ -359,7 +364,7 @@ pub fn fetch_device_node(path: &str) -> io::Result<String> {
 
 pub fn read_event(event_dev : &File) -> io::Result<input_event> {
 
-    let mut ev: input_event = unsafe { mem::zeroed() };/*
+    let mut ev: input_event = unsafe { mem::zeroed() };
     let ret = unsafe {
             libc::read(
                 event_dev.as_raw_fd(),
@@ -369,7 +374,7 @@ pub fn read_event(event_dev : &File) -> io::Result<input_event> {
         };
     if ret as usize != mem::size_of::<input_event>() {
         return Err(io::Error::last_os_error());
-    }*/
+    }
     Ok(ev)
 }
 
@@ -457,9 +462,6 @@ fn main() -> io::Result<()> {
             std::process::exit(1);
         });
 
-        // Sleep 2 second to allow userspace to detect the device (same as C example)
-        sleep(Duration::from_secs(2));
-
         let mut resultbuf: [c_char; 64] = [0; 64];
         ui_get_sysname(fd, resultbuf.as_mut_slice()).unwrap();
         let sysname = format!(
@@ -473,18 +475,19 @@ fn main() -> io::Result<()> {
 
         eprintln!("sysname: {}", sysname);
 
+        // Sleep 12 second to allow userspace to also listen to the device in case we need to debug
+        // Comment this out: sleep(Duration::from_secs(12));
+
         let event_device = OpenOptions::new()
         .read(true)
         .open(&devnode)
         .unwrap_or_else(|err| panic!("Could not open event device {}, Error {}",&devnode,err));
 
-        // Emit press + syn + release + syn
+        // Emit (press + syn) + (release + syn)
         let ev1 = emit_read_and_log(fd, &event_device, EV_KEY, KEY_SPACE, 1)?;
-        let ev2 = emit_read_and_log(fd, &event_device,EV_SYN, SYN_REPORT, 0)?;
-        let ev3 = emit_read_and_log(fd, &event_device,EV_KEY, KEY_SPACE, 0)?;
-        let ev4 = emit_read_and_log(fd, &event_device,EV_SYN, SYN_REPORT, 0)?;
+        let ev2 = emit_read_and_log(fd, &event_device,EV_KEY, KEY_SPACE, 0)?;
 
-        let eventlog = TestLog{events:vec![ev1,ev2,ev3,ev4]};
+        let eventlog = TestLog{events:vec![ev1,ev2]};
         let serialized = serde_json::to_string(&eventlog).unwrap();
         println!("Event log: {}",serialized);
 
