@@ -3,7 +3,7 @@
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
 use core::panic;
-use std::{time::Duration};
+use std::time::Duration;
 
 use vuinputd_tests::bwrap::SandboxChildIpc;
 
@@ -21,7 +21,7 @@ fn main() {
         ipc.send(b"ok").unwrap();
     } else {
         ipc.send(b"nok").unwrap();
-        println!("child received {}",incoming_str);
+        println!("child received {}", incoming_str);
         panic!("expected ipc message to be 'continue'");
     }
 }

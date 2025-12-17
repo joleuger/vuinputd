@@ -3,9 +3,8 @@
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
 use clap::Parser;
-use libc::{CLOCK_MONOTONIC, input_event, timespec, uinput_setup};
 use libc::{c_int, close, open, write, O_NONBLOCK, O_WRONLY};
-use vuinputd_tests::test_log::{LoggedInputEvent, TestLog};
+use libc::{input_event, timespec, uinput_setup, CLOCK_MONOTONIC};
 use std::ffi::{CStr, CString};
 use std::fs::{self, File, OpenOptions};
 use std::io::{self, ErrorKind};
@@ -14,6 +13,7 @@ use std::os::fd::AsRawFd;
 use std::os::raw::{c_char, c_void};
 use std::ptr;
 pub use uinput_ioctls::*;
+use vuinputd_tests::test_log::{LoggedInputEvent, TestLog};
 
 // Constants (same numeric values as in linux headers)
 const EV_SYN: u16 = 0x00;
@@ -276,7 +276,6 @@ unsafe fn set_standard_keyboard_keys(fd: i32) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-
 #[derive(Debug, Parser)]
 #[command(author, version, about)]
 struct Args {
@@ -322,17 +321,25 @@ fn emit(fd: c_int, ev_type: u16, code: u16, val: i32) -> io::Result<()> {
     Ok(())
 }
 
-
 // Note that before we can read, a SYN needs to be sent. Thus combine it.
-fn emit_read_and_log(emit_to: c_int, read_from:&File, ev_type: u16, code: u16, val: i32) -> io::Result<LoggedInputEvent> {
-    let (time_sent_sec,time_sent_nsec) = monotonic_time();
+fn emit_read_and_log(
+    emit_to: c_int,
+    read_from: &File,
+    ev_type: u16,
+    code: u16,
+    val: i32,
+) -> io::Result<LoggedInputEvent> {
+    let (time_sent_sec, time_sent_nsec) = monotonic_time();
     emit(emit_to, ev_type, code, val)?;
-    emit(emit_to,EV_SYN, SYN_REPORT, 0)?;
-    let input_event_recv=read_event(&read_from).unwrap();
-    let _syn_recv=read_event(&read_from).unwrap();
-    let (time_recv_sec,time_recv_nsec) = monotonic_time();
-    let duration_nsec =(time_recv_sec-time_sent_sec)*1_000_000+(time_recv_nsec-time_sent_nsec)/1000;
-    let send_and_receive_match = input_event_recv.type_==ev_type && input_event_recv.code==code && input_event_recv.value==val;
+    emit(emit_to, EV_SYN, SYN_REPORT, 0)?;
+    let input_event_recv = read_event(&read_from).unwrap();
+    let _syn_recv = read_event(&read_from).unwrap();
+    let (time_recv_sec, time_recv_nsec) = monotonic_time();
+    let duration_nsec =
+        (time_recv_sec - time_sent_sec) * 1_000_000 + (time_recv_nsec - time_sent_nsec) / 1000;
+    let send_and_receive_match = input_event_recv.type_ == ev_type
+        && input_event_recv.code == code
+        && input_event_recv.value == val;
 
     Ok(LoggedInputEvent {
         tv_sec: time_sent_sec,
@@ -341,13 +348,12 @@ fn emit_read_and_log(emit_to: c_int, read_from:&File, ev_type: u16, code: u16, v
         type_: ev_type,
         code: code,
         value: val,
-        send_and_receive_match: send_and_receive_match
+        send_and_receive_match: send_and_receive_match,
     })
 }
 
-
 pub fn fetch_device_node(path: &str) -> io::Result<String> {
-    println!("Read dir {}",&path);
+    println!("Read dir {}", &path);
     for entry in fs::read_dir(path)? {
         let entry = entry?; // propagate per-entry errors
         if let Some(name) = entry.file_name().to_str() {
@@ -360,23 +366,22 @@ pub fn fetch_device_node(path: &str) -> io::Result<String> {
     Err(io::Error::new(ErrorKind::NotFound, "no device found"))
 }
 
-pub fn read_event(event_dev : &File) -> io::Result<input_event> {
-
+pub fn read_event(event_dev: &File) -> io::Result<input_event> {
     let mut ev: input_event = unsafe { mem::zeroed() };
     let ret = unsafe {
-            libc::read(
-                event_dev.as_raw_fd(),
-                &mut ev as *mut _ as *mut c_void,
-                mem::size_of::<input_event>(),
-            )
-        };
+        libc::read(
+            event_dev.as_raw_fd(),
+            &mut ev as *mut _ as *mut c_void,
+            mem::size_of::<input_event>(),
+        )
+    };
     if ret as usize != mem::size_of::<input_event>() {
         return Err(io::Error::last_os_error());
     }
     Ok(ev)
 }
 
-fn monotonic_time() -> (i64,i64) {
+fn monotonic_time() -> (i64, i64) {
     let mut ts = timespec {
         tv_sec: 0,
         tv_nsec: 0,
@@ -385,13 +390,12 @@ fn monotonic_time() -> (i64,i64) {
     unsafe {
         libc::clock_gettime(CLOCK_MONOTONIC, &mut ts);
     }
-    (ts.tv_sec ,ts.tv_nsec)
+    (ts.tv_sec, ts.tv_nsec)
 }
-
 
 fn main() -> io::Result<()> {
     // open device - matches: open("/dev/uinput", O_WRONLY | O_NONBLOCK);
-    let args=Args::parse();
+    let args = Args::parse();
 
     let device = match args.dev_path {
         Some(dev_path) => dev_path,
@@ -468,7 +472,8 @@ fn main() -> io::Result<()> {
             CStr::from_ptr(resultbuf.as_ptr()).to_string_lossy()
         );
         println!("syspath: {}", sysname);
-        let devnode = fetch_device_node(&sysname).unwrap_or_else(|e| panic!("failed to fetch device node!: {e}"));
+        let devnode = fetch_device_node(&sysname)
+            .unwrap_or_else(|e| panic!("failed to fetch device node!: {e}"));
         println!("devnode: {}", devnode);
 
         eprintln!("sysname: {}", sysname);
@@ -477,17 +482,21 @@ fn main() -> io::Result<()> {
         // Comment this out: sleep(Duration::from_secs(12));
 
         let event_device = OpenOptions::new()
-        .read(true)
-        .open(&devnode)
-        .unwrap_or_else(|err| panic!("Could not open event device {}, Error {}",&devnode,err));
+            .read(true)
+            .open(&devnode)
+            .unwrap_or_else(|err| {
+                panic!("Could not open event device {}, Error {}", &devnode, err)
+            });
 
         // Emit (press + syn) + (release + syn)
         let ev1 = emit_read_and_log(fd, &event_device, EV_KEY, KEY_SPACE, 1)?;
-        let ev2 = emit_read_and_log(fd, &event_device,EV_KEY, KEY_SPACE, 0)?;
+        let ev2 = emit_read_and_log(fd, &event_device, EV_KEY, KEY_SPACE, 0)?;
 
-        let eventlog = TestLog{events:vec![ev1,ev2]};
+        let eventlog = TestLog {
+            events: vec![ev1, ev2],
+        };
         let serialized = serde_json::to_string(&eventlog).unwrap();
-        println!("Event log: {}",serialized);
+        println!("Event log: {}", serialized);
 
         // Destroy device and close fd
         ui_dev_destroy(fd).unwrap_or_else(|e| {

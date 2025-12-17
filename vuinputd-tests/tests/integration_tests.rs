@@ -14,7 +14,7 @@ fn test_bwrap_simple() {
         .ro_bind("/", "/")
         .tmpfs("/tmp")
         .die_with_parent()
-        .command("/usr/bin/echo",&["test","test","test"])
+        .command("/usr/bin/echo", &["test", "test", "test"])
         .run()
         .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
 
@@ -37,12 +37,12 @@ fn test_bwrap_ipc() {
         .expect("failed to create IPC");
 
     // Note that builder.run() will block. Thus, the send needs to happen before the child process blocks
-    // the host process. 
+    // the host process.
     ipc.send("continue".as_bytes())
         .unwrap_or_else(|e| panic!("failed to send data via ipc: {e}"));
 
     let out = builder
-        .command(bwrap_ipc,&[])
+        .command(bwrap_ipc, &[])
         .run()
         .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
 
@@ -54,11 +54,9 @@ fn test_bwrap_ipc() {
 
     let result = result.expect("error receiving input from ipc as host within 5 seconds");
     let result_str =
-    str::from_utf8(&result).expect("message received from ipc is not encoded as utf8");
-    println!("host received {}",result_str);
-
+        str::from_utf8(&result).expect("message received from ipc is not encoded as utf8");
+    println!("host received {}", result_str);
 }
-
 
 #[cfg(all(feature = "requires-privileges", feature = "requires-bwrap"))]
 #[test]
@@ -68,7 +66,10 @@ fn test_list_sys_in_container() {
         .ro_bind("/", "/")
         .tmpfs("/tmp")
         .die_with_parent()
-        .command("/usr/bin/ls",&["-lh","/sys/devices/virtual/input/input235"])
+        .command(
+            "/usr/bin/ls",
+            &["-lh", "/sys/devices/virtual/input/input235"],
+        )
         .run()
         .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
 
@@ -89,12 +90,15 @@ fn test_keyboard_on_host() {
     assert!(status.success());
 }
 
-
-#[cfg(all(feature = "requires-privileges", feature = "requires-uinput", feature = "requires-bwrap"))]
+#[cfg(all(
+    feature = "requires-privileges",
+    feature = "requires-uinput",
+    feature = "requires-bwrap"
+))]
 #[test]
 fn test_keyboard_in_container_with_uinput() {
     let test_keyboard = env!("CARGO_BIN_EXE_test-keyboard");
-    
+
     let out = bwrap::BwrapBuilder::new()
         .unshare_net()
         .ro_bind("/", "/")
@@ -102,7 +106,7 @@ fn test_keyboard_in_container_with_uinput() {
         .dev_bind("/dev/uinput", "/dev/uinput")
         .dev_bind("/dev/input", "/dev/input")
         .die_with_parent()
-        .command(test_keyboard,&[])
+        .command(test_keyboard, &[])
         .run()
         .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
 
@@ -113,14 +117,18 @@ fn test_keyboard_in_container_with_uinput() {
     assert!(out.status.success());
 }
 
-#[cfg(all(feature = "requires-privileges", feature = "requires-uinput", feature = "requires-bwrap"))]
-#[ignore]
+#[cfg(all(
+    feature = "requires-privileges",
+    feature = "requires-uinput",
+    feature = "requires-bwrap"
+))]
+//#[ignore]
 #[test]
 fn test_keyboard_in_container_with_vuinput() {
     run_vuinputd::ensure_vuinputd_running();
-    
+
     let test_keyboard = env!("CARGO_BIN_EXE_test-keyboard");
-    
+
     let out = bwrap::BwrapBuilder::new()
         .unshare_net()
         .ro_bind("/", "/")
@@ -132,7 +140,7 @@ fn test_keyboard_in_container_with_vuinput() {
         .tmpfs("/run")
         .dev_bind("/dev/vuinput-test", "/dev/uinput")
         .die_with_parent()
-        .command(test_keyboard,&[])
+        .command(test_keyboard, &[])
         .run()
         .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
 

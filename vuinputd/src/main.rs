@@ -68,13 +68,11 @@ struct Args {
 
 fn validate_args(args: &Args) -> Result<(), String> {
     // action might only occur alone
-    match (&args.major,&args.minor,&args.devname,&args.action) {
-        (None,None,None,Some(_)) => {},
-        (_,_,_,None)  => {},
+    match (&args.major, &args.minor, &args.devname, &args.action) {
+        (None, None, None, Some(_)) => {}
+        (_, _, _, None) => {}
         _ => {
-            return Err(
-                "--action must not be used in combination with any other argument".into(),
-            );
+            return Err("--action must not be used in combination with any other argument".into());
         }
     }
 
@@ -82,9 +80,7 @@ fn validate_args(args: &Args) -> Result<(), String> {
     match (&args.major, &args.minor) {
         (Some(_), Some(_)) | (None, None) => {}
         _ => {
-            return Err(
-                "--major and --minor must be specified together or not at all".into(),
-            );
+            return Err("--major and --minor must be specified together or not at all".into());
         }
     }
 
@@ -107,7 +103,9 @@ fn main() -> std::io::Result<()> {
     check_permissions().expect("failed to read the capabilities of the vuinputd process");
 
     let args = Args::parse();
-    let argv0 = std::env::args_os().next().expect("Couldn't retrieve program name");
+    let argv0 = std::env::args_os()
+        .next()
+        .expect("Couldn't retrieve program name");
 
     if let Err(e) = validate_args(&args) {
         eprintln!("Error: {e}");
@@ -115,10 +113,9 @@ fn main() -> std::io::Result<()> {
     }
 
     if args.action.is_some() {
-        let error_code=actions::handle_action::handle_cli_action(args.action.unwrap());
+        let error_code = actions::handle_action::handle_cli_action(args.action.unwrap());
         std::process::exit(error_code);
     }
-
 
     initialize_vuinput_state();
     VUINPUT_COUNTER.set(AtomicU64::new(3)).expect(
@@ -144,9 +141,9 @@ fn main() -> std::io::Result<()> {
 
     let vuinput_devicename = match &args.devname {
         None => "vuinput",
-        Some(devname) => devname
+        Some(devname) => devname,
     };
-    let vuinput_devicename = CString::new(format!("DEVNAME={}",vuinput_devicename)).unwrap();
+    let vuinput_devicename = CString::new(format!("DEVNAME={}", vuinput_devicename)).unwrap();
 
     let mut dev_info_argv: Vec<*const c_char> = vec![
         vuinput_devicename.as_ptr(), // pointer to the C string
@@ -155,9 +152,9 @@ fn main() -> std::io::Result<()> {
 
     // setting dev_major and dev_minor to 0 leads to a dynamic assignment of the major and minor, very likely beginning with 234:0
     // see  in https://www.kernel.org/doc/Documentation/admin-guide/devices.txt
-    let (major,minor) = match ((&args).major, (&args).minor) {
-        (Some(major), Some(minor)) => (major,minor),
-        _ => (0,0)
+    let (major, minor) = match ((&args).major, (&args).minor) {
+        (Some(major), Some(minor)) => (major, minor),
+        _ => (0, 0),
     };
     let ci = cuse_lowlevel::cuse_info {
         dev_major: major,

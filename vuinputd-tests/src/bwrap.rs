@@ -119,7 +119,8 @@ impl BwrapBuilder {
     }
 
     pub fn dev_bind(mut self, src: &str, dst: &str) -> Self {
-        self.args.extend(["--dev-bind".into(), src.into(), dst.into()]);
+        self.args
+            .extend(["--dev-bind".into(), src.into(), dst.into()]);
         self
     }
 
@@ -164,7 +165,6 @@ impl BwrapBuilder {
 
         let mut cmd = Command::new("bwrap");
 
-
         if let Some(fd) = self.ipc_child_fd.take() {
             // give up ownership of ipc_child_fd in host process.
             let fd = fd.into_raw_fd();
@@ -204,7 +204,7 @@ mod tests {
             .ro_bind("/", "/")
             .tmpfs("/tmp")
             .die_with_parent()
-            .command("/usr/bin/echo",&[])
+            .command("/usr/bin/echo", &[])
             .run()
             .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
 

@@ -2,9 +2,9 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
-#[derive(Serialize,Deserialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(tag = "action")]
 pub enum Action {
     #[serde(rename = "mknod-device")]
@@ -16,12 +16,8 @@ pub enum Action {
     },
 
     #[serde(rename = "announce-via-netlink")]
-    AnnounceViaNetlink {
-        message: String,
-    },
+    AnnounceViaNetlink { message: String },
 
     #[serde(rename = "remove-device")]
-    RemoveDevice {
-        path: String,
-    },
+    RemoveDevice { path: String },
 }
