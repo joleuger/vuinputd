@@ -12,7 +12,7 @@ use log::debug;
 
 use crate::{
     actions::{
-        mknod_input_device::remove_input_device,
+        input_device::remove_input_device,
         netlink_message::send_udev_monitor_message_with_properties, runtime_data::delete_udev_data,
     },
     job_engine::job::{Job, JobTarget},

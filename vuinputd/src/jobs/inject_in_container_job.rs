@@ -15,7 +15,7 @@ use log::debug;
 
 use crate::{
     actions::{
-        mknod_input_device::ensure_input_device,
+        input_device::ensure_input_device,
         netlink_message::send_udev_monitor_message_with_properties,
         runtime_data::{ensure_udev_structure, read_udev_data, write_udev_data},
     },

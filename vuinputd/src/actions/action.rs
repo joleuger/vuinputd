@@ -2,6 +2,8 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]
@@ -12,12 +14,20 @@ pub enum Action {
         path: String,
         major: u32,
         minor: u32,
-        mode: u32,
     },
 
-    #[serde(rename = "announce-via-netlink")]
-    AnnounceViaNetlink { message: String },
+    #[serde(rename = "emit-udev-event")]
+    EmitUdevEvent {
+        netlink_message: HashMap<String, String>,
+        runtime_data: Option<String>,
+        major: u32,
+        minor: u32,
+    },
 
     #[serde(rename = "remove-device")]
-    RemoveDevice { path: String },
+    RemoveDevice {
+        path: String,
+        major: u32,
+        minor: u32,
+    },
 }

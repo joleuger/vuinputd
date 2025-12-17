@@ -2,13 +2,13 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
+use anyhow::anyhow;
 use nix::sys::stat::{makedev, mknod, stat, Mode, SFlag};
-use std::error::Error;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::Path;
 
-pub fn ensure_input_device(dev_path: String, major: u64, minor: u64) -> Result<(), Box<dyn Error>> {
+pub fn ensure_input_device(dev_path: String, major: u64, minor: u64) -> anyhow::Result<()> {
     let input_dir = Path::new("/dev/input");
     // Create directory like `mkdir -p`
     if !input_dir.exists() {
@@ -70,23 +70,25 @@ pub fn ensure_input_device(dev_path: String, major: u64, minor: u64) -> Result<(
     Ok(())
 }
 
-pub fn remove_input_device(dev_path: String, major: u64, minor: u64) -> Result<(), Box<dyn Error>> {
+pub fn remove_input_device(dev_path: String, major: u64, minor: u64) -> anyhow::Result<()> {
     let path = Path::new(&dev_path);
     let expected_dev = makedev(major, minor);
 
     // --- Step 1: Ensure it is the correct device ---
     if !path.exists() {
-        return Err("Device does not exist".into());
+        return Err(anyhow!("Device does not exist"));
     }
     match stat(path) {
         Ok(st) => {
             let is_char = (st.st_mode & libc::S_IFMT as u32) == libc::S_IFCHR as u32;
             let dev_ok = st.st_rdev == expected_dev;
             if !(is_char && dev_ok) {
-                return Err("Device that should be deleted has wrong major and minor".into());
+                return Err(anyhow!(
+                    "Device that should be deleted has wrong major and minor"
+                ));
             }
         }
-        Err(_x) => return Err("Could not execute stat on device file".into()),
+        Err(_x) => return Err(anyhow!("Could not execute stat on device file")),
     }
 
     let _ = fs::remove_file(path);

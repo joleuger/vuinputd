@@ -4,6 +4,6 @@
 
 pub mod action;
 pub mod handle_action;
-pub mod mknod_input_device;
+pub mod input_device;
 pub mod netlink_message;
 pub mod runtime_data;
