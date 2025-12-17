@@ -13,8 +13,6 @@ use std::mem::{self, size_of, zeroed};
 use std::os::fd::AsRawFd;
 use std::os::raw::{c_char, c_void};
 use std::ptr;
-use std::thread::sleep;
-use std::time::Duration;
 pub use uinput_ioctls::*;
 
 // Constants (same numeric values as in linux headers)

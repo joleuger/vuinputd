@@ -5,7 +5,7 @@
 use std::future::Future;
 use std::pin::Pin;
 
-use crate::job_engine::job::{Dispatcher, Job, JobTarget};
+use super::job::{Job, JobTarget};
 
 pub struct ClosureJob {
     desc: String,
@@ -55,34 +55,40 @@ impl Job for ClosureJob {
     }
 }
 
-/// Example usage
-#[test]
-pub fn example() {
-    let mut dispatcher = Dispatcher::new();
+#[cfg(test)]
+mod tests {
+    use super::super::job::{Dispatcher, JobTarget};
+    use super::ClosureJob;
 
-    // Send a Host job
-    dispatcher.dispatch(Box::new(ClosureJob::new(
-        "Host maintenance",
-        JobTarget::Host,
-        false,
-        Box::new(|job: &ClosureJob| {
-            let target = job.target.clone();
-            Box::pin(async move {
-                println!("Running host job on {:?}", target);
-            })
-        }),
-    )));
+    /// Example usage
+    #[test]
+    pub fn example() {
+        let mut dispatcher = Dispatcher::new();
 
-    // Sending a Container job works the same
-    // dispatcher.dispatch(Job::new(JobTarget::Container(ns.clone()), "Container task", false, |target| async move {
-    //     println!("Running container job for {:?}", target);
-    // }));
+        // Send a Host job
+        dispatcher.dispatch(Box::new(ClosureJob::new(
+            "Host maintenance",
+            JobTarget::Host,
+            false,
+            Box::new(|job: &ClosureJob| {
+                let target = job.target.clone();
+                Box::pin(async move {
+                    println!("Running host job on {:?}", target);
+                })
+            }),
+        )));
 
-    //
-    // JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(ClosureJob::new("Monitor udev events", JobTarget::BackgroundLoop,false,
-    //     Box::new(move |_target| Box::pin(monitor_udev::udev_monitor_loop(cancel_token.clone()))))));
+        // Sending a Container job works the same
+        // dispatcher.dispatch(Job::new(JobTarget::Container(ns.clone()), "Container task", false, |target| async move {
+        //     println!("Running container job for {:?}", target);
+        // }));
 
-    // Allow loops to run briefly before dropping all senders -> graceful shutdown
-    dispatcher.close();
-    dispatcher.wait_until_finished();
+        //
+        // JOB_DISPATCHER.get().unwrap().lock().unwrap().dispatch(Box::new(ClosureJob::new("Monitor udev events", JobTarget::BackgroundLoop,false,
+        //     Box::new(move |_target| Box::pin(monitor_udev::udev_monitor_loop(cancel_token.clone()))))));
+
+        // Allow loops to run briefly before dropping all senders -> graceful shutdown
+        dispatcher.close();
+        dispatcher.wait_until_finished();
+    }
 }

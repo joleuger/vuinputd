@@ -37,6 +37,8 @@ pub mod job_engine;
 use crate::job_engine::{job::*, JOB_DISPATCHER};
 use crate::process_tools::*;
 
+pub mod actions;
+
 pub mod jobs;
 
 use clap::Parser;
@@ -58,9 +60,24 @@ struct Args {
     /// Device name (without /dev/)
     #[arg(long)]
     devname: Option<String>,
+
+    /// Action to execute (JSON encoded). Note that this excludes all other options.
+    #[arg(long, value_name = "JSON")]
+    pub action: Option<String>,
 }
 
 fn validate_args(args: &Args) -> Result<(), String> {
+    // action might only occur alone
+    match (&args.major,&args.minor,&args.devname,&args.action) {
+        (None,None,None,Some(_)) => {},
+        (_,_,_,None)  => {},
+        _ => {
+            return Err(
+                "--action must not be used in combination with any other argument".into(),
+            );
+        }
+    }
+
     // major/minor must appear together
     match (&args.major, &args.minor) {
         (Some(_), Some(_)) | (None, None) => {}
@@ -95,6 +112,11 @@ fn main() -> std::io::Result<()> {
     if let Err(e) = validate_args(&args) {
         eprintln!("Error: {e}");
         std::process::exit(2);
+    }
+
+    if args.action.is_some() {
+        let error_code=actions::handle_action::handle_cli_action(args.action.unwrap());
+        std::process::exit(error_code);
     }
 
 
