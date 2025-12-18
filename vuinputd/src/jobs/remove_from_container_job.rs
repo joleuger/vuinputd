@@ -12,12 +12,11 @@ use log::debug;
 
 use crate::{
     actions::{
-        input_device::remove_input_device,
-        netlink_message::send_udev_monitor_message_with_properties, runtime_data::delete_udev_data,
+        action::Action,
     },
     job_engine::job::{Job, JobTarget},
     jobs::monitor_udev_job::EVENT_STORE,
-    process_tools::{await_process, run_in_net_and_mnt_namespace, Pid, RequestingProcess},
+    process_tools::{self, await_process, Pid, RequestingProcess},
 };
 
 #[derive(Clone, Debug, Copy, PartialOrd, PartialEq)]
@@ -122,30 +121,34 @@ impl RemoveFromContainerJob {
         }
         let netlink_data = netlink_event.add_data;
 
-        // define for capturing
         let mut netlink_data = netlink_data.unwrap().clone();
-        let major = self.major;
-        let minor = self.minor;
         let dev_path = self.dev_path.clone();
 
         let _ = netlink_data.insert("ACTION".to_string(), "remove".to_string());
-        let child_pid = run_in_net_and_mnt_namespace(
-            &self.requesting_process,
-            Box::new(move || {
-                // TODO: we should keep the same order as event_execute_rules_on_remove in
-                // https://github.com/systemd/systemd/blob/main/src/udev/udev-event.c
 
-                send_udev_monitor_message_with_properties(netlink_data.clone());
-                if let Err(e) = delete_udev_data(major, minor) {
-                    debug!("Error deleting udev data for {}:{}: {e}", major, minor);
-                }
-                if let Err(e) = remove_input_device(dev_path.clone(), self.major, self.minor) {
-                    debug!("Error removing input device {}: {e}", dev_path.clone());
-                };
-            }),
-        )
-        .expect("subprocess should work");
-        let _exit_info = await_process(Pid::Pid(child_pid.as_raw())).await;
+        let remove_device_action = Action::RemoveDevice {
+            path: dev_path.clone(),
+            major: self.major,
+            minor: self.minor,
+        };
+
+        let child_pid_1 =
+            process_tools::start_action(remove_device_action, &self.requesting_process)
+                .expect("subprocess should work");
+
+        let emit_udev_event_action = Action::EmitUdevEvent {
+            netlink_message: netlink_data.clone(),
+            runtime_data: None,
+            major: self.major,
+            minor: self.minor,
+        };
+
+        let child_pid_2 =
+            process_tools::start_action(emit_udev_event_action, &self.requesting_process)
+                .expect("subprocess should work");
+
+        let _exit_info = await_process(Pid::Pid(child_pid_1)).await;
+        let _exit_info = await_process(Pid::Pid(child_pid_2)).await;
         self.set_state(&State::Finished);
     }
 }

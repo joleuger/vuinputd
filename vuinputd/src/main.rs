@@ -64,15 +64,29 @@ struct Args {
     /// Action to execute (JSON encoded). Note that this excludes all other options.
     #[arg(long, value_name = "JSON")]
     pub action: Option<String>,
+
+    /// Path to the target process's /proc/<pid>/ns directory used as namespace source.
+    #[arg(
+        long = "target-namespace",
+        value_name = "NS_PATH",
+        help = "Path to /proc/<pid>/ns used as the namespace source (e.g. /proc/1234/ns or /proc/self/ns)"
+    )]
+    pub target_namespace: Option<String>,
 }
 
 fn validate_args(args: &Args) -> Result<(), String> {
-    // action might only occur alone
-    match (&args.major, &args.minor, &args.devname, &args.action) {
-        (None, None, None, Some(_)) => {}
-        (_, _, _, None) => {}
+    // action might only occur with target-namespace
+    match (
+        &args.major,
+        &args.minor,
+        &args.devname,
+        &args.action,
+        &args.target_namespace,
+    ) {
+        (None, None, None, Some(_), _) => {}
+        (_, _, _, None, None) => {}
         _ => {
-            return Err("--action must not be used in combination with any other argument".into());
+            return Err("--action must not be used in combination with any other argument other than target-namespace".into());
         }
     }
 
@@ -100,8 +114,6 @@ fn validate_args(args: &Args) -> Result<(), String> {
 fn main() -> std::io::Result<()> {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("debug")).init();
 
-    check_permissions().expect("failed to read the capabilities of the vuinputd process");
-
     let args = Args::parse();
     let argv0 = std::env::args_os()
         .next()
@@ -113,9 +125,14 @@ fn main() -> std::io::Result<()> {
     }
 
     if args.action.is_some() {
+        if let Some(target_namespace) = args.target_namespace {
+            process_tools::run_in_net_and_mnt_namespace(target_namespace.as_str()).unwrap();
+        }
         let error_code = actions::handle_action::handle_cli_action(args.action.unwrap());
         std::process::exit(error_code);
     }
+
+    check_permissions().expect("failed to read the capabilities of the vuinputd process");
 
     initialize_vuinput_state();
     VUINPUT_COUNTER.set(AtomicU64::new(3)).expect(

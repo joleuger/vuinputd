@@ -29,7 +29,13 @@ pub unsafe extern "C" fn vuinput_open(
     let fh = get_fresh_filehandle();
     let ctx = fuse_lowlevel::fuse_req_ctx(_req);
     debug!("fh {}: opened by process id {} (host view)", fh, (*ctx).pid);
-    let requesting_process = get_requesting_process(Pid::Pid((*ctx).pid));
+    let pid = Pid::Pid(
+        (*ctx)
+            .pid
+            .try_into()
+            .expect("pid must be a positive integer"),
+    );
+    let requesting_process = get_requesting_process(pid);
     debug!("fh {}: namespaces {}", fh, requesting_process);
     // namespaces net:4026531840, uts:4026531838, ipc:4026531839, pid:4026531836, pid_for_children:4026531836, user:4026531837, mnt:4026531841, cgroup:4026531835, time:4026531834, time_for_children:4026531834
     (*_fi).fh = fh;

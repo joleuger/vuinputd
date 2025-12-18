@@ -4,27 +4,29 @@
 
 use async_io::Async;
 use log::debug;
-use nix::{
-    sched::{setns, CloneFlags},
-    unistd::{fork, ForkResult},
-};
 use std::{
     fs::{self, File},
     io::Read,
-    os::fd::{AsFd, FromRawFd, OwnedFd, RawFd},
+    os::{
+        fd::{AsRawFd, FromRawFd, OwnedFd, RawFd},
+        unix::process::CommandExt,
+    },
     path::Path,
-    process,
+    process::{Command},
     sync::OnceLock,
 };
 
+use anyhow::anyhow;
 use std::io;
+
+use crate::actions::action::Action;
 
 pub static SELF_NAMESPACES: OnceLock<Namespaces> = OnceLock::new();
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum Pid {
     SelfPid,
-    Pid(i32),
+    Pid(u32),
 }
 
 impl Pid {
@@ -184,7 +186,7 @@ fn get_ppid(pid: Pid) -> Option<Pid> {
         .lines()
         .find(|line| line.starts_with("PPid:"))
         .and_then(|line| line.split_whitespace().nth(1))
-        .and_then(|ppid| ppid.parse::<i32>().ok());
+        .and_then(|ppid| ppid.parse::<u32>().ok());
     match ppid {
         None => None,
         Some(ppid) => Some(Pid::Pid(ppid)),
@@ -252,36 +254,48 @@ pub fn get_requesting_process(pid: Pid) -> RequestingProcess {
 
 /// Runs a function inside the given network and mount namespaces.
 /// Returns the child PID so the caller can `waitpid` on it.
-pub fn run_in_net_and_mnt_namespace(
-    ns: &RequestingProcess,
-    func: Box<dyn Fn()>,
-) -> nix::Result<nix::unistd::Pid> {
-    //Note: The child process is created with a single thread—the one that called fork().
+pub fn start_action(action: Action, ns: &RequestingProcess) -> anyhow::Result<u32> {
+    let action_json = serde_json::to_string(&action).unwrap();
 
-    match unsafe { fork()? } {
-        ForkResult::Parent { child } => {
-            // Parent: return the PID of the child
-            Ok(child)
-        }
-        ForkResult::Child => {
-            debug!("Start new process {}", process::id());
-            // enter namespace
-            let path: &Path = Path::new(ns.nsroot.as_str());
-            debug!("Entering namespaces of process {}. We assume this is the root process of the container.",ns.nsroot.clone());
-            if !fs::exists(path).unwrap() {
-                debug!("the root process of the container whose namespaces we want to enter does not exist anymore!");
-                std::process::exit(0);
-            }
-            let net = File::open(ns.nsroot.clone() + "/net").expect("net not found");
-            let mnt = File::open(ns.nsroot.clone() + "/mnt").expect("mnt not found");
-            setns(net.as_fd(), CloneFlags::CLONE_NEWNET).expect("couldn't enter net");
-            setns(mnt.as_fd(), CloneFlags::CLONE_NEWNS).expect("couldn't enter mnt");
+    let child = unsafe {
+        Command::new("/proc/self/exe")
+            .args([
+                "--action",
+                action_json.as_str(),
+                "--target-namespace",
+                ns.nsroot.as_str(),
+            ])
+            .pre_exec(|| {
+                // Last resort, if the parent just is killed.
+                libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL);
+                Ok(())
+            })
+            .spawn()
+            .expect("failed to start vuinputd")
+    };
 
-            // execute your function
-            func();
-            std::process::exit(0);
-        }
+    Result::Ok(child.id())
+}
+
+pub fn run_in_net_and_mnt_namespace(target_namespace: &str) -> anyhow::Result<()> {
+    debug!(
+        "Entering namespaces of process {}. We assume this is the root process of the container.",
+        target_namespace
+    );
+
+    let path: &Path = Path::new(target_namespace);
+    if !fs::exists(path).unwrap() {
+        return Err(anyhow!("the root process of the container whose namespaces we want to enter does not exist anymore"));
     }
+    let net = File::open(target_namespace.to_string() + "/net")?;
+    let mnt = File::open(target_namespace.to_string() + "/mnt")?;
+
+    unsafe {
+        // enter namespaces
+        libc::setns(net.as_raw_fd(), libc::CLONE_NEWNET);
+        libc::setns(mnt.as_raw_fd(), libc::CLONE_NEWNS);
+    };
+    anyhow::Ok(())
 }
 
 pub async fn await_process(pid: Pid) -> io::Result<i32> {

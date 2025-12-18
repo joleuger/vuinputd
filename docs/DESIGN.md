@@ -408,6 +408,82 @@ During the creation of the device, the type, vendor id, and product id will be
 
 BUS_VIRTUAL 0x6 is not used, because I couldn't find a place where I could register a vendor and product id. The now used combination is unique, as the product id is registered under [pid.codes](https://pid.codes/1209/5020/). So, there is no problem to use it in a system-wide hwdb-file for udev.
 
+---
+
+## **3.10 Namespace Switching After Exec**
+
+### **Decision**
+
+`vuinputd` and its helper actions are executed in the **host mount namespace**, and only **after process startup** do they switch into the target container’s namespaces using `setns()` (e.g. `CLONE_NEWNS`, `CLONE_NEWNET`).
+
+Dynamic libraries (e.g. `libc`, `libfuse3`, `libudev`) are therefore resolved and mapped **before** entering the container’s mount namespace.  
+After the namespace switch, the process guarantees that it only performs filesystem operations intended for the container environment.
+
+### **Rationale**
+
+This design intentionally separates **code loading** from **runtime filesystem semantics**:
+
+* ELF loading and dynamic linking are one-time operations performed at `execve()`
+* already-mapped libraries are unaffected by later namespace changes
+* mount namespaces only affect *future* path resolution, not existing mappings
+
+By switching namespaces after startup, `vuinputd` avoids assumptions about:
+
+* the presence of shared libraries inside the container
+* libc / dynamic loader compatibility across distributions
+* static linking availability for complex dependencies like `libfuse`
+
+At the same time, runtime behavior (device access, `/dev`, `/sys`, `/proc`) correctly reflects the container’s view once `setns()` has completed.
+
+### **Why post-exec `setns()` is correct**
+
+* Widely used by container runtimes and helpers (e.g. `runc`, `crun`, `systemd-nspawn`, `nsenter`)
+* Ensures maximum compatibility with heterogeneous container filesystems
+* Avoids brittle static builds and duplicated dependency trees
+* Preserves security boundaries: namespace changes are explicit and minimal
+
+### **Constraints and Guarantees**
+
+To keep this model correct, `vuinputd` enforces:
+
+* namespace switching occurs before spawning threads
+* no unintended filesystem access occurs before `setns()`
+* all container-visible paths are accessed only after entering the target namespace
+* required kernel interfaces (`/dev/fuse`, `/sys`, `/proc`) are provided by the container
+
+Under these constraints, post-exec namespace switching provides a robust and predictable execution model.
+
+### **Alternatives Considered**
+
+* **Fully static binaries**  
+  Rejected due to complexity, limited library support, and reduced portability.
+
+* **Executing entirely inside the container filesystem**  
+  Rejected due to dependency availability, loader ABI mismatch, and tighter coupling between host and container environments.
+
+* **Executing the logic directly without an exec**
+
+  This was the approach used in vuinputd releases 0.1 and 0.2:  
+  the daemon would `fork()` and immediately execute the action logic in the child
+  without performing an `execve()`.
+
+  While this avoids process re-initialization overhead, it is fundamentally unsafe
+  in a multi-threaded program.
+
+  In particular:
+
+  * `fork()` only duplicates the calling thread
+  * other threads may hold internal libc locks at the time of the fork
+  * common subsystems (notably `malloc`) are not async-signal-safe after `fork()`
+  * any allocation or lock acquisition in the child can deadlock permanently
+
+  This is not a theoretical concern: if another thread holds the `malloc` arena lock
+  at the time of `fork()`, the child process may block forever on its first allocation,
+  including implicit allocations inside libc or Rust runtime code.
+  See also [https://github.com/rust-lang/rust/blob/c1e865c/src/libstd/sys/unix/process.rs#L202
+
+The chosen approach offers the best balance between correctness, portability, and operational simplicity.
+
 
 ---
 

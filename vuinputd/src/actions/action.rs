@@ -12,22 +12,22 @@ pub enum Action {
     #[serde(rename = "mknod-device")]
     MknodDevice {
         path: String,
-        major: u32,
-        minor: u32,
+        major: u64,
+        minor: u64,
     },
 
     #[serde(rename = "emit-udev-event")]
     EmitUdevEvent {
         netlink_message: HashMap<String, String>,
         runtime_data: Option<String>,
-        major: u32,
-        minor: u32,
+        major: u64,
+        minor: u64,
     },
 
     #[serde(rename = "remove-device")]
     RemoveDevice {
         path: String,
-        major: u32,
-        minor: u32,
+        major: u64,
+        minor: u64,
     },
 }

@@ -15,13 +15,12 @@ use log::debug;
 
 use crate::{
     actions::{
-        input_device::ensure_input_device,
-        netlink_message::send_udev_monitor_message_with_properties,
-        runtime_data::{ensure_udev_structure, read_udev_data, write_udev_data},
+        action::Action,
+        runtime_data::{read_udev_data},
     },
     job_engine::job::{Job, JobTarget},
     jobs::monitor_udev_job::EVENT_STORE,
-    process_tools::{await_process, run_in_net_and_mnt_namespace, Pid, RequestingProcess},
+    process_tools::{self, await_process, Pid, RequestingProcess},
 };
 
 #[derive(Clone, Debug, Copy, PartialOrd, PartialEq)]
@@ -145,31 +144,33 @@ impl InjectInContainerJob {
             return;
         }
 
-        // define for capturing
-        let major = self.major;
-        let minor = self.minor;
         let runtime_data = runtime_data.unwrap();
         let netlink_data = netlink_data.unwrap();
         let dev_path = self.dev_path.clone();
 
-        let child_pid = run_in_net_and_mnt_namespace(
-            &self.requesting_process,
-            Box::new(move || {
-                if let Err(e) = ensure_input_device(dev_path.clone(), self.major, self.minor) {
-                    debug!("Error creating input device {}: {e}", dev_path.clone());
-                };
-                ensure_udev_structure().unwrap();
-                if let Err(e) = write_udev_data(runtime_data.as_str(), major, minor) {
-                    debug!(
-                        "Error writing udev data for device {}: {e}",
-                        dev_path.clone()
-                    );
-                };
-                send_udev_monitor_message_with_properties(netlink_data.clone());
-            }),
-        )
-        .expect("subprocess should work");
-        let _exit_info = await_process(Pid::Pid(child_pid.as_raw())).await.unwrap();
+        let mknod_device_action = Action::MknodDevice {
+            path: dev_path.clone(),
+            major: self.major,
+            minor: self.minor,
+        };
+
+        let child_pid_1 =
+            process_tools::start_action(mknod_device_action, &self.requesting_process)
+                .expect("subprocess should work");
+
+        let emit_udev_event_action = Action::EmitUdevEvent {
+            netlink_message: netlink_data.clone(),
+            runtime_data: Some(runtime_data),
+            major: self.major,
+            minor: self.minor,
+        };
+
+        let child_pid_2 =
+            process_tools::start_action(emit_udev_event_action, &self.requesting_process)
+                .expect("subprocess should work");
+
+        let _exit_info = await_process(Pid::Pid(child_pid_1)).await.unwrap();
+        let _exit_info = await_process(Pid::Pid(child_pid_2)).await.unwrap();
         self.set_state(&State::Finished);
     }
 }
