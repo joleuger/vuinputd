@@ -481,6 +481,7 @@ Under these constraints, post-exec namespace switching provides a robust and pre
   at the time of `fork()`, the child process may block forever on its first allocation,
   including implicit allocations inside libc or Rust runtime code.
   See also [https://github.com/rust-lang/rust/blob/c1e865c/src/libstd/sys/unix/process.rs#L202
+  and https://systemd.io/ARCHITECTURE/ .
 
 The chosen approach offers the best balance between correctness, portability, and operational simplicity.
 

@@ -198,6 +198,7 @@ pub unsafe extern "C" fn vuinput_ioctl(
                     .dispatch(Box::new(mknod_job));
                 awaiter(&jobs::mknod_device_in_container_job::State::Finished);
                 debug!("fh {}: mknod_device in container has been finished ", fh);
+                fuse_lowlevel::fuse_reply_ioctl(_req, 0, std::ptr::null(), 0);
 
                 // we do not wait for the udev stuff
                 let emit_udev_event_job = EmitUdevEventInContainerJob::new(
@@ -213,13 +214,9 @@ pub unsafe extern "C" fn vuinput_ioctl(
                     .lock()
                     .unwrap()
                     .dispatch(Box::new(emit_udev_event_job));
+            } else {
+                fuse_lowlevel::fuse_reply_ioctl(_req, 0, std::ptr::null(), 0);
             }
-
-            // write a SYN-event (which is just zeros) just for validation
-            let syn_event: [u8; 24] = [0; 24];
-            vuinput_state.file.write_all(&syn_event).unwrap();
-
-            fuse_lowlevel::fuse_reply_ioctl(_req, 0, std::ptr::null(), 0);
         }
         UI_DEV_DESTROY => {
             debug!("fh {}: ioctl UI_DEV_DESTROY", fh);
