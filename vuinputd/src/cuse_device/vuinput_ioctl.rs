@@ -14,7 +14,8 @@ use uinput_ioctls::*;
 
 use crate::cuse_device::{get_vuinput_state, VuFileHandle};
 use crate::job_engine::JOB_DISPATCHER;
-use crate::jobs::inject_in_container_job::InjectInContainerJob;
+use crate::jobs::emit_udev_event_in_container_job::EmitUdevEventInContainerJob;
+use crate::jobs::mknod_device_in_container_job::MknodDeviceInContainerJob;
 use crate::jobs::remove_from_container_job::RemoveFromContainerJob;
 use crate::process_tools::SELF_NAMESPACES;
 use crate::{cuse_device::*, jobs};
@@ -181,25 +182,40 @@ pub unsafe extern "C" fn vuinput_ioctl(
                 .unwrap()
                 .equal_mnt_and_net(&vuinput_state.requesting_process.namespaces)
             {
-                let inject_job = InjectInContainerJob::new(
+                let mknod_job = MknodDeviceInContainerJob::new(
                     vuinput_state.requesting_process.clone(),
                     devnode.clone(),
                     sysname.clone(),
                     major,
                     minor,
                 );
-                let awaiter = inject_job.get_awaiter_for_state();
+                let awaiter = mknod_job.get_awaiter_for_state();
                 JOB_DISPATCHER
                     .get()
                     .unwrap()
                     .lock()
                     .unwrap()
-                    .dispatch(Box::new(inject_job));
-                awaiter(&jobs::inject_in_container_job::State::Finished);
+                    .dispatch(Box::new(mknod_job));
+                awaiter(&jobs::mknod_device_in_container_job::State::Finished);
                 debug!(
-                    "fh {}: injecting dev-nodes in container has been finished ",
+                    "fh {}: mknod_device in container has been finished ",
                     fh
                 );
+
+                // we do not wait for the udev stuff
+                let emit_udev_event_job = EmitUdevEventInContainerJob::new(
+                    vuinput_state.requesting_process.clone(),
+                    devnode.clone(),
+                    sysname.clone(),
+                    major,
+                    minor,
+                );
+                JOB_DISPATCHER
+                    .get()
+                    .unwrap()
+                    .lock()
+                    .unwrap()
+                    .dispatch(Box::new(emit_udev_event_job));
             }
 
             // write a SYN-event (which is just zeros) just for validation

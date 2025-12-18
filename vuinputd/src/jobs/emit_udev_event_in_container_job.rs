@@ -31,7 +31,7 @@ pub enum State {
 }
 
 #[derive(Clone, Debug)]
-pub struct InjectInContainerJob {
+pub struct EmitUdevEventInContainerJob {
     requesting_process: RequestingProcess,
     target: JobTarget,
     dev_path: String,
@@ -41,7 +41,7 @@ pub struct InjectInContainerJob {
     sync_state: Arc<(Mutex<State>, Condvar)>,
 }
 
-impl InjectInContainerJob {
+impl EmitUdevEventInContainerJob {
     pub fn new(
         requesting_process: RequestingProcess,
         dev_path: String,
@@ -82,16 +82,16 @@ impl InjectInContainerJob {
     }
 }
 
-impl Job for InjectInContainerJob {
+impl Job for EmitUdevEventInContainerJob {
     fn desc(&self) -> &str {
-        "Inject input device into container"
+        "emit udev event into container"
     }
 
     fn execute_after_cancellation(&self) -> bool {
         false
     }
 
-    fn create_task(self: &InjectInContainerJob) -> Pin<Box<dyn Future<Output = ()>>> {
+    fn create_task(self: &EmitUdevEventInContainerJob) -> Pin<Box<dyn Future<Output = ()>>> {
         Box::pin(self.clone().inject_in_container())
     }
 
@@ -100,7 +100,7 @@ impl Job for InjectInContainerJob {
     }
 }
 
-impl InjectInContainerJob {
+impl EmitUdevEventInContainerJob {
     async fn inject_in_container(self) {
         // temporary hack that needs to be replaced. We try 50 times
         // Should be: Wait for the device to be created, the runtime data to be written and the
@@ -148,16 +148,6 @@ impl InjectInContainerJob {
         let netlink_data = netlink_data.unwrap();
         let dev_path = self.dev_path.clone();
 
-        let mknod_device_action = Action::MknodDevice {
-            path: dev_path.clone(),
-            major: self.major,
-            minor: self.minor,
-        };
-
-        let child_pid_1 =
-            process_tools::start_action(mknod_device_action, &self.requesting_process)
-                .expect("subprocess should work");
-
         let emit_udev_event_action = Action::EmitUdevEvent {
             netlink_message: netlink_data.clone(),
             runtime_data: Some(runtime_data),
@@ -165,12 +155,11 @@ impl InjectInContainerJob {
             minor: self.minor,
         };
 
-        let child_pid_2 =
+        let child_pid =
             process_tools::start_action(emit_udev_event_action, &self.requesting_process)
                 .expect("subprocess should work");
 
-        let _exit_info = await_process(Pid::Pid(child_pid_1)).await.unwrap();
-        let _exit_info = await_process(Pid::Pid(child_pid_2)).await.unwrap();
+        let _exit_info = await_process(Pid::Pid(child_pid)).await.unwrap();
         self.set_state(&State::Finished);
     }
 }
