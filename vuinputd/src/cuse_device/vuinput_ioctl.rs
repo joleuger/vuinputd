@@ -197,10 +197,7 @@ pub unsafe extern "C" fn vuinput_ioctl(
                     .unwrap()
                     .dispatch(Box::new(mknod_job));
                 awaiter(&jobs::mknod_device_in_container_job::State::Finished);
-                debug!(
-                    "fh {}: mknod_device in container has been finished ",
-                    fh
-                );
+                debug!("fh {}: mknod_device in container has been finished ", fh);
 
                 // we do not wait for the udev stuff
                 let emit_udev_event_job = EmitUdevEventInContainerJob::new(

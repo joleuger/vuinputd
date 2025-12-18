@@ -14,10 +14,7 @@ use async_io::Timer;
 use log::debug;
 
 use crate::{
-    actions::{
-        action::Action,
-        runtime_data::{read_udev_data},
-    },
+    actions::{action::Action, runtime_data::read_udev_data},
     job_engine::job::{Job, JobTarget},
     jobs::monitor_udev_job::EVENT_STORE,
     process_tools::{self, await_process, Pid, RequestingProcess},
@@ -102,16 +99,14 @@ impl Job for MknodDeviceInContainerJob {
 
 impl MknodDeviceInContainerJob {
     async fn inject_in_container(self) {
-
         let mknod_device_action = Action::MknodDevice {
             path: self.dev_path.clone(),
             major: self.major,
             minor: self.minor,
         };
 
-        let child_pid =
-            process_tools::start_action(mknod_device_action, &self.requesting_process)
-                .expect("subprocess should work");
+        let child_pid = process_tools::start_action(mknod_device_action, &self.requesting_process)
+            .expect("subprocess should work");
 
         let _exit_info = await_process(Pid::Pid(child_pid)).await.unwrap();
         self.set_state(&State::Finished);

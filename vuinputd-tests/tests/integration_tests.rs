@@ -134,8 +134,7 @@ fn test_keyboard_in_container_with_vuinput() {
         .ro_bind("/", "/")
         .tmpfs("/tmp")
         // dev needs to be writable for the new devices
-        .tmpfs("/dev")
-        .tmpfs("/dev/input")
+        .dev()
         // run needs to be writable for the udev devices
         .tmpfs("/run")
         .dev_bind("/dev/vuinput-test", "/dev/uinput")

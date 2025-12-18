@@ -12,7 +12,7 @@ use std::{
         unix::process::CommandExt,
     },
     path::Path,
-    process::{Command},
+    process::Command,
     sync::OnceLock,
 };
 

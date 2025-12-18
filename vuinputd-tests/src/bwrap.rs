@@ -100,6 +100,19 @@ impl BwrapBuilder {
         self
     }
 
+    pub fn dev(mut self) -> Self {
+        // for our tests, we cannot simply use the "--dev"-flag, because it creates a tmpfs with the nodev flag
+        // see SETUP_MOUNT_DEV and PRIV_SEP_OP_TMPFS_MOUNT
+        // in https://github.com/containers/bubblewrap/blob/v0.11.0/bubblewrap.c#L1370-L1376 .
+        // So, we mount a temporary directory that does not have this restrictions.
+        self.args.extend([
+            "--dev-bind".into(),
+            "/dev/tmp/vuinputd-test".into(),
+            "/dev".into(),
+        ]);
+        self
+    }
+
     pub fn tmpfs(mut self, path: &str) -> Self {
         self.args.push("--tmpfs".into());
         self.args.push(path.into());

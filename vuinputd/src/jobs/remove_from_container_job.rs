@@ -11,9 +11,7 @@ use std::{
 use log::debug;
 
 use crate::{
-    actions::{
-        action::Action,
-    },
+    actions::action::Action,
     job_engine::job::{Job, JobTarget},
     jobs::monitor_udev_job::EVENT_STORE,
     process_tools::{self, await_process, Pid, RequestingProcess},
