@@ -1,3 +1,24 @@
+vuinputd (0.3.0-1) unstable; urgency=medium
+
+  * Refactor container and namespace handling:
+    - Refactoring from forked lambda execution to JSON-based job re-exec.
+    - Refactor namespace switching after exec; introduce --target-namespace option.
+    - Split inject_in_container into emit_udev_event and mknod_device.
+  * Add udev rules to the Debian package.
+  * Significant improvements to integration testing:
+    - Add integration tests for device creation via uinput using bubblewrap.
+    - Add event logging support to integration tests.
+    - Run a separate vuinputd instance with its own device node as part of tests.
+  * Improve internal structure and error handling:
+    - Switch to anyhow for error handling.
+    - General name refactorings and code cleanup.
+  * Add command-line options to control virtual uinput device properties
+    (devname, major, minor).
+  * Update GitHub Actions dependencies and conduct first microbenchmark.
+  * Minor fixes in examples and formatting cleanup.
+
+ -- Johannes Leupolz <dev@leupolz.eu>  Thu, 19 Dec 2025 21:30:00 +0000
+
 vuinputd (0.2.0-1) unstable; urgency=medium
 
   * Register official USB vendor/product ID (VID 0x1209, PID 0x5020) under
@@ -24,11 +45,11 @@ vuinputd (0.2.0-1) unstable; urgency=medium
     and service file.
   * Updated documentation for release readiness.
 
- -- Johannes Leupolz <vinput@leupolz.eu>  Thu, 06 Dec 2025 21:00:00 +0000
+ -- Johannes Leupolz <dev@leupolz.eu>  Thu, 06 Dec 2025 21:00:00 +0000
 
 
 vuinputd (0.1.0-1) unstable; urgency=medium
 
   * Initial release.
 
- -- Johannes Leupolz <vinput@leupolz.eu>  Wed, 27 Aug 2025 12:00:00 +0000
+ -- Johannes Leupolz <dev@leupolz.eu>  Wed, 27 Aug 2025 12:00:00 +0000
