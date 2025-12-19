@@ -1,1 +1,3 @@
 usr/bin/vuinputd
+usr/lib/udev/hwdb.d/90-vuinputd.hwdb
+usr/lib/udev/rules.d/90-vuinputd-protect.rules
