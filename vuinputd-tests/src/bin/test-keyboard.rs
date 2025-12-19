@@ -280,7 +280,7 @@ unsafe fn set_standard_keyboard_keys(fd: i32) -> Result<(), std::io::Error> {
 #[command(author, version, about)]
 struct Args {
     /// Use IPC
-    #[arg(long, default_value_t = false)]
+    #[arg(long)]
     ipc: bool,
 
     /// Device path (with /dev/)
@@ -335,7 +335,7 @@ fn emit_read_and_log(
     let input_event_recv = read_event(&read_from).unwrap();
     let _syn_recv = read_event(&read_from).unwrap();
     let (time_recv_sec, time_recv_nsec) = monotonic_time();
-    let duration_nsec =
+    let duration_usec =
         (time_recv_sec - time_sent_sec) * 1_000_000 + (time_recv_nsec - time_sent_nsec) / 1000;
     let send_and_receive_match = input_event_recv.type_ == ev_type
         && input_event_recv.code == code
@@ -343,8 +343,8 @@ fn emit_read_and_log(
 
     Ok(LoggedInputEvent {
         tv_sec: time_sent_sec,
-        tv_usec: time_sent_nsec,
-        duration_nsec: duration_nsec,
+        tv_nsec: time_sent_nsec,
+        duration_usec: duration_usec,
         type_: ev_type,
         code: code,
         value: val,

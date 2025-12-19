@@ -58,6 +58,8 @@ sequenceDiagram
     Kernel->>Game: 10. send input data via eventX device
 ```
 
+> **Performance note:**
+> While `vuinputd` adds an extra userspace round trip via CUSE, the measured overhead is in the range of **tens of microseconds per event** in a simple integration test. This is several orders of magnitude smaller than typical sources of input latency such as frame rendering, compositor delays, scheduling jitter, or network latency. In practice, the additional cost is negligible for interactive and latency-sensitive applications, including gaming. More detailed benchmarks can be found in `TESTS.md`.
 
 ---
 

@@ -8,9 +8,9 @@ use serde::{Deserialize, Serialize};
 pub struct LoggedInputEvent {
     pub tv_sec: i64,
 
-    pub tv_usec: i64,
+    pub tv_nsec: i64,
 
-    pub duration_nsec: i64,
+    pub duration_usec: i64,
 
     pub type_: u16,
 

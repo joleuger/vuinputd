@@ -99,14 +99,18 @@ fn test_keyboard_on_host() {
 fn test_keyboard_in_container_with_uinput() {
     let test_keyboard = env!("CARGO_BIN_EXE_test-keyboard");
 
-    let out = bwrap::BwrapBuilder::new()
+    let (builder, _ipc) = bwrap::BwrapBuilder::new()
         .unshare_net()
         .ro_bind("/", "/")
         .tmpfs("/tmp")
         .dev_bind("/dev/uinput", "/dev/uinput")
         .dev_bind("/dev/input", "/dev/input")
         .die_with_parent()
-        .command(test_keyboard, &[])
+        .with_ipc()
+        .expect("failed to create IPC");
+
+    let out = builder
+        .command(test_keyboard, &["--ipc"])
         .run()
         .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
 
@@ -122,14 +126,13 @@ fn test_keyboard_in_container_with_uinput() {
     feature = "requires-uinput",
     feature = "requires-bwrap"
 ))]
-//#[ignore]
 #[test]
 fn test_keyboard_in_container_with_vuinput() {
     run_vuinputd::ensure_vuinputd_running();
 
     let test_keyboard = env!("CARGO_BIN_EXE_test-keyboard");
 
-    let out = bwrap::BwrapBuilder::new()
+    let (builder, _ipc) = bwrap::BwrapBuilder::new()
         .unshare_net()
         .ro_bind("/", "/")
         .tmpfs("/tmp")
@@ -139,7 +142,11 @@ fn test_keyboard_in_container_with_vuinput() {
         .tmpfs("/run")
         .dev_bind("/dev/vuinput-test", "/dev/uinput")
         .die_with_parent()
-        .command(test_keyboard, &[])
+        .with_ipc()
+        .expect("failed to create IPC");
+
+    let out = builder
+        .command(test_keyboard, &["--ipc"])
         .run()
         .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
 
