@@ -225,7 +225,111 @@ Sample output from `journalctl` showing vuinputd output:
 
 ---
 
-## 7. Troubleshooting
+## 7. Handling Phantom Input Events Caused by VTs
+
+On Linux systems without an active graphical session (X11 or Wayland), **virtual terminals (VTs)** remain in text mode (`KD_TEXT`) and continue to process keyboard input via the kernel VT keyboard handler.
+This can lead to *phantom input events*, where injected or forwarded input (e.g. via `vuinputd`) unintentionally reaches:
+
+* `getty` login prompts
+* inactive consoles
+* kernel VT hotkeys (e.g. `Ctrl+Alt+Fn`)
+
+The following approaches can be used to prevent or mitigate this behavior.
+
+### Solution 1: Use KMSCON (DRM/KMS-based console)
+
+A robust solution is to replace the kernel VT text console with a **DRM/KMS-based console** such as `kmscon`.
+
+#### How it helps
+
+* The kernel VT is no longer responsible for input handling
+* Keyboard input is processed via evdev, not the VT layer
+* Seat assignment is respected:
+
+  * devices on non-default seats (e.g. `seat_vuinput`) are ignored
+* Phantom input events do not reach `getty`
+
+#### Notes
+
+* Requires DRM/KMS availability
+* On most real GPUs, the DRM device remains available even when no monitor is connected and enters a hotplug-waiting state
+* For headless systems, a virtual KMS device can be used:
+
+  ```bash
+  modprobe vkms
+  ```
+
+#### Trade-offs
+
+* Additional dependencies (DRM, kmscon)
+* Not always desired for minimal or embedded systems
+
+### Solution 2: VT Guard Mode (`--vt-guard`)
+
+`vuinputd` can be started with the `--vt-guard` flag to explicitly neutralize VT input handling.
+
+#### How it works
+
+At startup, `vuinputd` performs a minimal VT operation such as:
+
+* switching the active VT into graphics mode (`KD_GRAPHICS`), or
+* disabling the kernel keyboard processing for that VT
+
+This is done via direct VT ioctls (e.g. `KDSETMODE`), ensuring that:
+
+* the kernel VT keyboard handler is inactive
+* `getty` does not receive injected input events
+
+#### Characteristics
+
+* Very lightweight
+* No DRM, compositor, or additional services required
+* Effective even on fully headless systems
+
+#### Caveats
+
+* Relies on low-level VT ioctls
+* Considered **hacky**, but intentionally minimal
+* Bypasses higher-level session management
+
+### Solution 3: fallbackdm (Work in Progress)
+
+`fallbackdm` is an experimental, lightweight **logind-integrated fallback display manager**.
+
+#### Intended behavior
+
+* Starts only when no graphical session is active
+* Registers a proper `greeter` session with `systemd-logind`
+* Takes ownership of a VT and switches it to `KD_GRAPHICS`
+* Prevents `getty` and the VT keyboard handler from receiving input
+* Leaves other VTs untouched for emergency local access
+
+#### Advantages
+
+* Clean integration with `systemd-logind`
+* No direct VT hacks
+* Compatible with standard Linux session semantics
+* Designed to coexist with real display managers
+
+#### Status
+
+* Currently under development
+* Intended as the long-term, principled solution
+
+### Summary
+
+| Solution     | Headless  | Lightweight | logind-aware | Recommended for              |
+| ------------ | --------- | ----------- | ------------ | ---------------------------- |
+| KMSCON       | ⚠️ (vkms) | ❌           | ✅            | Full console replacement     |
+| `--vt-guard` | ✅         | ✅           | ❌            | Minimal setups               |
+| fallbackdm   | ✅         | ⚠️          | ✅            | Long-term, clean integration |
+
+Choose the approach that best fits your system constraints and deployment model.
+
+
+---
+
+## 8. Troubleshooting
 
 | Symptom                     | Possible Cause                       | Fix                                               |
 | --------------------------- | ------------------------------------ | ------------------------------------------------- |
@@ -246,7 +350,7 @@ Dez 14 21:33:17 wohnzimmer vuinputd[2172719]: called `Result::unwrap()` on an `E
 Ensure /dev and /run are writable in the container. If in doubt, use tmpfs.
 ---
 
-## 8. Notes and Advanced Topics
+## 9. Notes and Advanced Topics
 
 * You can safely run **multiple containers**.
 * Devices are automatically cleaned up when the container stops.
@@ -258,7 +362,7 @@ Ensure /dev and /run are writable in the container. If in doubt, use tmpfs.
 
 ---
 
-## 9. References
+## 10. References
 
 * [mkosi manual](https://github.com/systemd/mkosi/blob/main/mkosi/resources/man/mkosi.1.md)
 * [Docker device rules documentation](https://docs.docker.com/engine/reference/run/#device-cgroup-rule)

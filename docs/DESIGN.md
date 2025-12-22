@@ -487,59 +487,6 @@ The chosen approach offers the best balance between correctness, portability, an
 
 ---
 
-## **3.11 VT Guarding for Headless / No-Compositor Systems**
-
-### **Decision**
-
-When **no X11 or Wayland session is active**, `vuinputd` relies on a small, separate **VT-guard daemon** to own the currently active Virtual Terminal (VT) and switch it into **graphics mode (`KD_GRAPHICS`)**.
-
-If an X11 or Wayland compositor is running, **no VT guard is required**, as the compositor already owns a VT and has disabled the VT keyboard handler.
-
-The VT-guard:
-
-* runs in the foreground
-* opens the active VT (`/dev/tty`)
-* prints an informational notice
-* switches the VT to `KD_GRAPHICS`
-* registers for VT release notifications
-* restores `KD_TEXT` and exits on VT switch
-
-It does not access evdev, uinput, or interpret key events.
-
-### **Rationale**
-
-On systems without a graphical session, keyboard input reaches `getty` via the **VT keyboard handler**, independent of evdev.  
-Switching the VT to `KD_GRAPHICS` disables this path and effectively starves `getty` on that VT.
-
-This mirrors compositor behavior (Xorg / Wayland) without requiring rendering, DRM, or input stack integration.
-
-### **Designed Behavior: VT Switching Is Allowed**
-
-VT switching (e.g. `Ctrl+Alt+Fn`) is **intentionally not blocked**.
-
-This preserves a recovery path:
-
-* users can switch to another VT
-* `getty` remains accessible for local login
-* physical access always overrides remote control
-
-On VT switch, the VT-guard restores `KD_TEXT` and exits cleanly.
-
-### **Constraints and Guarantees**
-
-The VT-guard guarantees:
-
-* the active VT does not accept keyboard input
-* `getty` is effectively disabled on that VT
-* normal console behavior resumes on VT switch
-
-### **Alternatives Considered**
-
-* **Blocking VT switching**  
-  Rejected to preserve local recovery.
-
----
-
 ## **3.11 Fallback Graphical Session (`fallbackdm`)**
 
 ### **Problem Statement**
@@ -620,6 +567,8 @@ Conceptually, `fallbackdm` acts as a **headless placeholder graphical session** 
 * **Disabling gettys or VT switching globally**
   Rejected to preserve emergency local access and standard Linux behavior.
 
+* **Depending on a full display manager**
+  Rejected, as this may require dummy display devices in headless configurations and adds unnecessary complexity.
 
 ---
 
