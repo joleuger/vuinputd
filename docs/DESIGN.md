@@ -485,6 +485,141 @@ Under these constraints, post-exec namespace switching provides a robust and pre
 
 The chosen approach offers the best balance between correctness, portability, and operational simplicity.
 
+---
+
+## **3.11 VT Guarding for Headless / No-Compositor Systems**
+
+### **Decision**
+
+When **no X11 or Wayland session is active**, `vuinputd` relies on a small, separate **VT-guard daemon** to own the currently active Virtual Terminal (VT) and switch it into **graphics mode (`KD_GRAPHICS`)**.
+
+If an X11 or Wayland compositor is running, **no VT guard is required**, as the compositor already owns a VT and has disabled the VT keyboard handler.
+
+The VT-guard:
+
+* runs in the foreground
+* opens the active VT (`/dev/tty`)
+* prints an informational notice
+* switches the VT to `KD_GRAPHICS`
+* registers for VT release notifications
+* restores `KD_TEXT` and exits on VT switch
+
+It does not access evdev, uinput, or interpret key events.
+
+### **Rationale**
+
+On systems without a graphical session, keyboard input reaches `getty` via the **VT keyboard handler**, independent of evdev.  
+Switching the VT to `KD_GRAPHICS` disables this path and effectively starves `getty` on that VT.
+
+This mirrors compositor behavior (Xorg / Wayland) without requiring rendering, DRM, or input stack integration.
+
+### **Designed Behavior: VT Switching Is Allowed**
+
+VT switching (e.g. `Ctrl+Alt+Fn`) is **intentionally not blocked**.
+
+This preserves a recovery path:
+
+* users can switch to another VT
+* `getty` remains accessible for local login
+* physical access always overrides remote control
+
+On VT switch, the VT-guard restores `KD_TEXT` and exits cleanly.
+
+### **Constraints and Guarantees**
+
+The VT-guard guarantees:
+
+* the active VT does not accept keyboard input
+* `getty` is effectively disabled on that VT
+* normal console behavior resumes on VT switch
+
+### **Alternatives Considered**
+
+* **Blocking VT switching**  
+  Rejected to preserve local recovery.
+
+---
+
+## **3.11 Fallback Graphical Session (`fallbackdm`)**
+
+### **Problem Statement**
+
+On systems without an active graphical session (X11 or Wayland), the kernel VT subsystem remains in **text mode (`KD_TEXT`)**, and the VT keyboard handler is active.
+As a result:
+
+* `getty` receives keyboard input on the active VT
+* VT key handling (e.g. `Ctrl+Alt+Fn`) is enabled
+* input devices may interact with the VT layer in unintended ways
+
+When a graphical session is active, these issues do not occur:
+the compositor, via `systemd-logind`, owns a VT, switches it to `KD_GRAPHICS`, and the VT keyboard handler is disabled automatically.
+
+The missing piece is a **well-defined fallback** for the “no graphical session” case.
+
+---
+
+### **Decision**
+
+`fallbackdm` is implemented as a **logind-managed fallback graphical session**.
+
+It runs only when **no other graphical session is active** on the seat and exists solely to:
+
+* open a regular logind session
+* occupy the assigned VT
+* let logind switch the VT to `KD_GRAPHICS`
+
+`fallbackdm` itself does **not** manipulate VTs, perform `KDSETMODE` ioctls, or access `/dev/tty` directly.
+All VT and seat handling is delegated to `systemd-logind`.
+
+---
+
+### **Behavior and Lifecycle**
+
+* `fallbackdm` starts as a normal session on the seat
+* while active:
+
+  * the VT is in `KD_GRAPHICS`
+  * VT keyboard handling and `getty` input are suppressed
+* when a real graphical session (greeter or compositor) starts:
+
+  * logind deactivates `fallbackdm`
+  * VT ownership is transferred automatically
+* when the graphical session ends:
+
+  * `fallbackdm` may be restarted to reclaim the fallback role
+
+`fallbackdm` is non-interactive by design but may display **minimal status information** in the future.
+
+---
+
+### **Rationale**
+
+This design:
+
+* reuses existing, well-tested logind behavior
+* avoids duplicating VT and seat logic
+* guarantees compatibility with:
+
+  * Wayland compositors
+  * graphical login managers
+  * multi-seat setups
+* keeps the implementation minimal and robust
+
+Conceptually, `fallbackdm` acts as a **headless placeholder graphical session** that ensures consistent system behavior even when no real graphical environment is running.
+
+---
+
+### **Alternatives Considered**
+
+* **Direct VT management (KDSETMODE, VT ioctls)**
+  Rejected due to complexity, fragility, and duplication of logind functionality.
+
+* **Filtering input at the evdev / uinput layer**
+  Rejected as insufficient: it does not address VT keyboard handling or `getty` behavior.
+
+* **Disabling gettys or VT switching globally**
+  Rejected to preserve emergency local access and standard Linux behavior.
+
 
 ---
 
