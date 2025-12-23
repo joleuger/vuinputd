@@ -79,7 +79,10 @@ struct Args {
 
     #[arg(
         long = "vt-guard",
-        help = "Prevent leakage of uinput to VT by, sending K_OFF to /dev/tty0"
+        help = "Prevent all keyboard input from reaching the VT by setting K_OFF on /dev/tty0.",
+        long_help = "Disable VT keyboard handling (K_OFF on /dev/tty0) to prevent uinput leakage.\n\
+                 This disables all keyboard input on the virtual terminals, including physical keyboards.\n\
+                 Loss of local access may require recovery via SSH or a rescue boot."
     )]
     pub vt_guard: bool,
 }
@@ -144,6 +147,7 @@ fn main() -> std::io::Result<()> {
 
     if args.vt_guard {
         vt_tools::mute_keyboard()?;
+        std::process::exit(0);
     }
 
     check_permissions().expect("failed to read the capabilities of the vuinputd process");

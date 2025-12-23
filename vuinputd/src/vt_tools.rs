@@ -2,10 +2,10 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
+use log::{error, info, warn};
 use std::fs::OpenOptions;
 use std::io;
 use std::os::unix::io::AsRawFd;
-use log::{error, info, warn};
 
 use libc::ioctl;
 
@@ -29,10 +29,7 @@ pub fn check_vt_status() {
 
             let rc = unsafe { ioctl(fd, KDGKBMODE, &mut mode) };
             if rc < 0 {
-                error!(
-                    "KDGKBMODE ioctl failed: {}",
-                    io::Error::last_os_error()
-                );
+                error!("KDGKBMODE ioctl failed: {}", io::Error::last_os_error());
                 return;
             }
 
