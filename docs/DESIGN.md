@@ -499,7 +499,7 @@ As a result:
 * input devices may interact with the VT layer in unintended ways
 
 When a graphical session is active, these issues do not occur:
-the compositor, via `systemd-logind`, owns a VT, switches it to `KD_GRAPHICS`, and the VT keyboard handler is disabled automatically.
+the compositor, via `systemd-logind`, owns a VT, switches it to `KD_GRAPHICS`, and the VT keyboard handler is **suppressed**.
 
 The missing piece is a **well-defined fallback** for the “no graphical session” case.
 
@@ -511,12 +511,12 @@ The missing piece is a **well-defined fallback** for the “no graphical session
 
 It runs only when **no other graphical session is active** on the seat and exists solely to:
 
-* open a regular logind session
+* open a regular logind session **of class `greeter**`
 * occupy the assigned VT
-* let logind switch the VT to `KD_GRAPHICS`
+* let logind switch the VT to `KD_GRAPHICS` **and mute the keyboard handler**
 
 `fallbackdm` itself does **not** manipulate VTs, perform `KDSETMODE` ioctls, or access `/dev/tty` directly.
-All VT and seat handling is delegated to `systemd-logind`.
+All VT and seat handling is delegated to `systemd-logind` **via a standard PAM session**.
 
 ---
 
@@ -524,15 +524,13 @@ All VT and seat handling is delegated to `systemd-logind`.
 
 * `fallbackdm` starts as a normal session on the seat
 * while active:
-
   * the VT is in `KD_GRAPHICS`
-  * VT keyboard handling and `getty` input are suppressed
+  * **the kernel VT keyboard handler is muted (equivalent to `K_OFF` or `KDSKBMUTE`)**
+  * `getty` input is suppressed
 * when a real graphical session (greeter or compositor) starts:
-
   * logind deactivates `fallbackdm`
   * VT ownership is transferred automatically
 * when the graphical session ends:
-
   * `fallbackdm` may be restarted to reclaim the fallback role
 
 `fallbackdm` is non-interactive by design but may display **minimal status information** in the future.
@@ -546,7 +544,6 @@ This design:
 * reuses existing, well-tested logind behavior
 * avoids duplicating VT and seat logic
 * guarantees compatibility with:
-
   * Wayland compositors
   * graphical login managers
   * multi-seat setups
@@ -560,13 +557,10 @@ Conceptually, `fallbackdm` acts as a **headless placeholder graphical session** 
 
 * **Direct VT management (KDSETMODE, VT ioctls)**
   Rejected due to complexity, fragility, and duplication of logind functionality.
-
 * **Filtering input at the evdev / uinput layer**
   Rejected as insufficient: it does not address VT keyboard handling or `getty` behavior.
-
 * **Disabling gettys or VT switching globally**
-  Rejected to preserve emergency local access and standard Linux behavior.
-
+  Rejected to preserve emergency local access and standard Linux behavior. **The logind-managed approach allows physical VT switching to remain functional for debugging.**
 * **Depending on a full display manager**
   Rejected, as this may require dummy display devices in headless configurations and adds unnecessary complexity.
 

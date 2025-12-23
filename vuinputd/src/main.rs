@@ -16,10 +16,13 @@
 // distinguish between cleanup jobs that must not be cancelled and other jobs (especially background jobs)
 // naming: dev_path vs dev_node. I guess I mean the same.
 // Send warning, if udev monitor does not exist
+// Filter out Ctrl+Alt+Fx. "sysrq" keys or the low-level VT switching combos.
 
 use ::cuse_lowlevel::*;
 use log::info;
 use std::ffi::CString;
+use std::fs::OpenOptions;
+use std::os::fd::AsRawFd;
 use std::os::raw::c_char;
 use std::sync::atomic::AtomicU64;
 use std::sync::Mutex;
@@ -40,6 +43,7 @@ use crate::process_tools::*;
 pub mod actions;
 
 pub mod jobs;
+pub mod vt_tools;
 
 use clap::Parser;
 
@@ -72,6 +76,12 @@ struct Args {
         help = "Path to /proc/<pid>/ns used as the namespace source (e.g. /proc/1234/ns or /proc/self/ns)"
     )]
     pub target_namespace: Option<String>,
+
+    #[arg(
+        long = "vt-guard",
+        help = "Prevent leakage of uinput to VT by, sending K_OFF to /dev/tty0"
+    )]
+    pub vt_guard: bool,
 }
 
 fn validate_args(args: &Args) -> Result<(), String> {
@@ -132,7 +142,12 @@ fn main() -> std::io::Result<()> {
         std::process::exit(error_code);
     }
 
+    if args.vt_guard {
+        vt_tools::mute_keyboard()?;
+    }
+
     check_permissions().expect("failed to read the capabilities of the vuinputd process");
+    vt_tools::check_vt_status();
 
     initialize_vuinput_state();
     VUINPUT_COUNTER.set(AtomicU64::new(3)).expect(
