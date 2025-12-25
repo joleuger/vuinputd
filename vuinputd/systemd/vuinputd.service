@@ -4,6 +4,11 @@ After=systemd-udevd.service
 Requires=systemd-udevd.service
 
 [Service]
+# The Flag --vt-guard disables VT keyboard handling (K_OFF on /dev/tty0) to prevent uinput leakage.
+# This disables all keyboard input on the virtual terminals, including physical keyboards.
+# Loss of local access may require recovery via SSH or a rescue boot.
+#ExecStartPre=/usr/local/bin/vuinputd --vt-guard
+
 # major 120 is reserved for local/experimental use. I picked minor 414795 with the use
 # of a random number generator to omit conflicts.
 ExecStart=/usr/local/bin/vuinputd --major 120 --minor 414795
@@ -16,6 +21,8 @@ Restart=on-failure
 # we need the permission to create all sorts of devices
 DeviceAllow=char-* rwm
 
+# Enable debug logs during preproduction phase
+Environment=RUST_LOG=debug
 
 [Install]
 WantedBy=multi-user.target
