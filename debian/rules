@@ -8,6 +8,18 @@ override_dh_auto_build:
 	cargo build --release
 
 override_dh_auto_install:
-	install -D -m 0755 target/release/vuinputd debian/tmp/usr/bin/vuinputd
-	install -D -m 0755 vuinputd/udev/90-vuinputd.hwdb debian/tmp/usr/lib/udev/hwdb.d/90-vuinputd.hwdb
-	install -D -m 0755 vuinputd/udev/90-vuinputd-protect.rules debian/tmp/usr/lib/udev/rules.d/90-vuinputd-protect.rules
+	# install binary
+	install -D -m 0755 target/release/vuinputd \
+		debian/tmp/usr/bin/vuinputd
+
+	# patch systemd unit for Debian (/usr/local/bin -> /usr/bin)
+	sed 's|/usr/local/bin/vuinputd|/usr/bin/vuinputd|g' \
+		vuinputd/systemd/vuinputd.service \
+		> debian/tmp/usr/lib/systemd/system/vuinputd.service
+
+	# install udev rules + hwdb
+	install -D -m 0644 vuinputd/udev/90-vuinputd-protect.rules \
+		debian/tmp/usr/lib/udev/rules.d/90-vuinputd-protect.rules
+
+	install -D -m 0644 vuinputd/udev/90-vuinputd.hwdb \
+		debian/tmp/usr/lib/udev/hwdb.d/90-vuinputd.hwdb
