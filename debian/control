@@ -2,12 +2,6 @@ Source: vuinputd
 Section: utils
 Priority: optional
 Maintainer: Johannes Leupolz <dev@leupolz.eu>
-Depends:
- ${misc:Depends},
- ${shlibs:Depends},
- systemd,
- udev,
- libfuse3-3
 Build-Depends: debhelper (>= 12),
  dh-cargo (>= 24),
  dh-sequence-bash-completion,
@@ -39,5 +33,10 @@ Rules-Requires-Root: no
 
 Package: vuinputd
 Architecture: amd64
-Depends: ${shlibs:Depends}, ${misc:Depends}
+Depends:
+ ${misc:Depends},
+ ${shlibs:Depends},
+ systemd,
+ udev,
+ libfuse3-3
 Description: Virtual input forwarder for Linux.

@@ -23,6 +23,7 @@ jobs:
       - name: Install build dependencies
         run: |
           sudo apt update
+          # cargo deps
           sudo apt install -y \
             build-essential \
             devscripts \
@@ -33,7 +34,10 @@ jobs:
             pkg-config \
             libudev-dev \
             libfuse3-dev \
-            fuse3
+            fuse3 \
+            libclang-dev
+          # debian packages, if packages are not downloaded via cargo
+          sudo apt install -y librust-bindgen-dev librust-nix-dev librust-libc-dev librust-time-dev librust-log-dev librust-env-logger-dev librust-libudev-dev librust-regex-dev librust-async-channel-dev librust-futures-dev librust-async-io-dev librust-anyhow-dev librust-clap-dev
 
       - name: Show versions (debug)
         run: |
