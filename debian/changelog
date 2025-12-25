@@ -1,3 +1,20 @@
+vuinputd (0.3.1-1) unstable; urgency=medium
+
+  * Improve Debian packaging and release process:
+    - Add release pipeline for Debian packages.
+    - Improve Debian build scripts.
+    - Fix issues in debian/rules.
+  * Improve startup robustness:
+    - Check the status of tty1 during startup.
+    - Add hints regarding vt-guard usage to the systemd service file.
+  * Documentation and usability improvements:
+    - Improve help messages.
+    - Document two approaches to mitigate the VT keyboard handler issue when
+      no graphical input session is active.
+
+ -- Johannes Leupolz <dev@leupolz.eu>  Fri, 20 Dec 2025 22:00:00 +0000
+
+
 vuinputd (0.3.0-1) unstable; urgency=medium
 
   * Refactor container and namespace handling:
@@ -18,6 +35,7 @@ vuinputd (0.3.0-1) unstable; urgency=medium
   * Minor fixes in examples and formatting cleanup.
 
  -- Johannes Leupolz <dev@leupolz.eu>  Thu, 19 Dec 2025 21:30:00 +0000
+
 
 vuinputd (0.2.0-1) unstable; urgency=medium
 
