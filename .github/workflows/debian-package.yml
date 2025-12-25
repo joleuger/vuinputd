@@ -1,0 +1,59 @@
+name: Debian Package
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "*"
+
+env:
+  CARGO_TERM_COLOR: always
+  DEB_BUILD_OPTIONS: nocheck
+
+jobs:
+  build-deb:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install build dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y \
+            build-essential \
+            devscripts \
+            debhelper \
+            dh-cargo \
+            cargo \
+            rustc \
+            pkg-config \
+            libudev-dev \
+            libfuse3-dev \
+            fuse3
+
+      - name: Show versions (debug)
+        run: |
+          rustc --version
+          cargo --version
+          dpkg-buildpackage --version
+
+      - name: Build Debian package
+        run: |
+          dpkg-buildpackage -us -uc -b
+
+      - name: Collect artifacts
+        run: |
+          mkdir -p artifacts
+          mv ../*.deb artifacts/ || true
+          mv ../*.buildinfo artifacts/ || true
+          mv ../*.changes artifacts/ || true
+
+      - name: Upload Debian artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: vuinputd-debian-package
+          path: artifacts/
