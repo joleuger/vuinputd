@@ -3,20 +3,14 @@
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
 use std::{
-    collections::HashMap,
     future::Future,
     pin::Pin,
     sync::{Arc, Condvar, Mutex},
-    time::Duration,
 };
 
-use async_io::Timer;
-use log::debug;
-
 use crate::{
-    actions::{action::Action, runtime_data::read_udev_data},
+    actions::{action::Action},
     job_engine::job::{Job, JobTarget},
-    jobs::monitor_udev_job::EVENT_STORE,
     process_tools::{self, await_process, Pid, RequestingProcess},
 };
 

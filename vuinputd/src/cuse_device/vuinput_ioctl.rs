@@ -7,7 +7,6 @@ use libc::{iovec, size_t, EBADRQC};
 use libc::{uinput_abs_setup, uinput_ff_erase, uinput_ff_upload, uinput_setup};
 use log::debug;
 use std::ffi::CStr;
-use std::io::Write;
 use std::os::fd::AsRawFd;
 use std::os::raw::{c_char, c_int, c_uint, c_void};
 use uinput_ioctls::*;

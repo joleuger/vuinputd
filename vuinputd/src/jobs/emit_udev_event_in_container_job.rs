@@ -143,7 +143,6 @@ impl EmitUdevEventInContainerJob {
 
         let runtime_data = runtime_data.unwrap();
         let netlink_data = netlink_data.unwrap();
-        let dev_path = self.dev_path.clone();
 
         let emit_udev_event_action = Action::EmitUdevEvent {
             netlink_message: netlink_data.clone(),
