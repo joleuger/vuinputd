@@ -9,7 +9,7 @@ use std::{
 };
 
 use crate::{
-    actions::{action::Action},
+    actions::action::Action,
     job_engine::job::{Job, JobTarget},
     process_tools::{self, await_process, Pid, RequestingProcess},
 };

@@ -3,6 +3,8 @@
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
 use async_io::Async;
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine as _;
 use log::debug;
 use std::{
     fs::{self, File},
@@ -252,10 +254,23 @@ pub fn get_requesting_process(pid: Pid) -> RequestingProcess {
     }
 }
 
+fn print_debug_string(action: &str, ns: &RequestingProcess) {
+    let action_base64 = (BASE64_STANDARD.encode(action));
+    let mut debugstring = String::new();
+    debugstring.push_str("In case you need to debug the system calls, call `strace vuinputd");
+    debugstring.push_str(" --target-namespace ");
+    debugstring.push_str(ns.nsroot.as_str());
+    debugstring.push_str(" --action-base64 ");
+    debugstring.push_str(action_base64.as_str());
+    debugstring.push_str("`");
+    debug!("{}", debugstring);
+}
+
 /// Runs a function inside the given network and mount namespaces.
 /// Returns the child PID so the caller can `waitpid` on it.
 pub fn start_action(action: Action, ns: &RequestingProcess) -> anyhow::Result<u32> {
     let action_json = serde_json::to_string(&action).unwrap();
+    print_debug_string(&action_json, &ns);
 
     let child = unsafe {
         Command::new("/proc/self/exe")

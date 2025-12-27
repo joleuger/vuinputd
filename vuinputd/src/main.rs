@@ -19,10 +19,10 @@
 // Filter out Ctrl+Alt+Fx. "sysrq" keys or the low-level VT switching combos.
 
 use ::cuse_lowlevel::*;
+use base64::prelude::BASE64_STANDARD;
+use base64::Engine as _;
 use log::info;
 use std::ffi::CString;
-use std::fs::OpenOptions;
-use std::os::fd::AsRawFd;
 use std::os::raw::c_char;
 use std::sync::atomic::AtomicU64;
 use std::sync::Mutex;
@@ -69,6 +69,10 @@ struct Args {
     #[arg(long, value_name = "JSON")]
     pub action: Option<String>,
 
+    /// Action to execute (base64-encoded JSON). Note that this excludes all other options.
+    #[arg(long = "action-base64", value_name = "BASE64")]
+    pub action_base64: Option<String>,
+
     /// Path to the target process's /proc/<pid>/ns directory used as namespace source.
     #[arg(
         long = "target-namespace",
@@ -88,18 +92,27 @@ struct Args {
 }
 
 fn validate_args(args: &Args) -> Result<(), String> {
+    let action: &Option<String> = match (&args.action, &args.action_base64) {
+        (None, None) => &None,
+        (None, Some(_)) => &args.action_base64,
+        (Some(_), None) => &args.action,
+        (Some(_), Some(_)) => {
+            return Err("--action and --action-base64 may not be used together".into());
+        }
+    };
+
     // action might only occur with target-namespace
     match (
         &args.major,
         &args.minor,
         &args.devname,
-        &args.action,
+        action,
         &args.target_namespace,
     ) {
         (None, None, None, Some(_), _) => {}
         (_, _, _, None, None) => {}
         _ => {
-            return Err("--action must not be used in combination with any other argument other than target-namespace".into());
+            return Err("--action or --action-base64 must not be used in combination with any other argument other than target-namespace".into());
         }
     }
 
@@ -137,11 +150,26 @@ fn main() -> std::io::Result<()> {
         std::process::exit(2);
     }
 
-    if args.action.is_some() {
+    let action = match (&args.action, &args.action_base64) {
+        (Some(json), None) => Some(json.clone()),
+        (None, Some(b64)) => {
+            let decoded = BASE64_STANDARD
+                .decode(&b64)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidInput, e))?;
+
+            let decoded = String::from_utf8(decoded)
+                .map_err(|e| std::io::Error::new(std::io::ErrorKind::InvalidData, e))?;
+            Some(decoded)
+        }
+        (None, None) => None,
+        _ => unreachable!("validate_args enforces mutual exclusion"),
+    };
+
+    if action.is_some() {
         if let Some(target_namespace) = args.target_namespace {
             process_tools::run_in_net_and_mnt_namespace(target_namespace.as_str()).unwrap();
         }
-        let error_code = actions::handle_action::handle_cli_action(args.action.unwrap());
+        let error_code = actions::handle_action::handle_cli_action(action.unwrap());
         std::process::exit(error_code);
     }
 
