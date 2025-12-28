@@ -1,3 +1,15 @@
+vuinputd (0.3.2-1) unstable; urgency=medium
+
+  * Improve debugging support for container execution:
+    - Add documentation describing how to debug actions triggered by
+      vuinputd inside containers.
+    - Make it easier to use strace to debug child processes.
+    - Log action descriptions as base64-encoded JSON when executing
+      container actions (e.g. mknod), simplifying shell-based debugging.
+
+ -- Johannes Leupolz <vinput@leupolz.eu>  Sat, 21 Dec 2025 10:30:00 +0000
+
+
 vuinputd (0.3.1-1) unstable; urgency=medium
 
   * Improve Debian packaging and release process:
