@@ -77,6 +77,7 @@ sequenceDiagram
 See [docs/BUILD.md](https://github.com/joleuger/vuinputd/blob/main/docs/BUILD.md) for a short build and installation guide.  
 See [docs/DESIGN.md](https://github.com/joleuger/vuinputd/blob/main/docs/DESIGN.md) for a detailed overview of the architecture, design trade-offs, and security considerations.
 See [docs/USAGE.md](https://github.com/joleuger/vuinputd/blob/main/docs/USAGE.md) for a short usage guide.
+See [docs/DEBUG.md](https://github.com/joleuger/vuinputd/blob/main/docs/DEBUG.md) for a guide how to debug problems with containers.
 
 ---
 
