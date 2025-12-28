@@ -37,7 +37,7 @@ jobs:
             fuse3 \
             libclang-dev
           # debian packages, if packages are not downloaded via cargo
-          sudo apt install -y librust-bindgen-dev librust-nix-dev librust-libc-dev librust-time-dev librust-log-dev librust-env-logger-dev librust-libudev-dev librust-regex-dev librust-async-channel-dev librust-futures-dev librust-async-io-dev librust-anyhow-dev librust-clap-dev
+          sudo apt install -y librust-bindgen-dev librust-nix-dev librust-libc-dev librust-time-dev librust-log-dev librust-env-logger-dev librust-libudev-dev librust-regex-dev librust-async-channel-dev librust-futures-dev librust-async-io-dev librust-anyhow-dev librust-clap-dev librust-base64-dev
 
       - name: Show versions (debug)
         run: |
