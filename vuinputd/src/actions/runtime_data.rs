@@ -6,9 +6,11 @@ use std::fs::{self, File};
 use std::io::{self, Write};
 use std::path::Path;
 
+use log::{info, warn};
+
 /// Ensure required udev directories and files exist
 pub fn ensure_udev_structure() -> io::Result<()> {
-    // TODO: this _must_ exist, before a service using libinput is run. The time of device creation might be too late
+    // Note that this structure _must_ exist, before a service using libinput is run. The time of device creation might be too late.
 
     let data_dir = Path::new("/run/udev/data");
     let control_file = Path::new("/run/udev/control");
@@ -20,6 +22,11 @@ pub fn ensure_udev_structure() -> io::Result<()> {
 
     // Ensure /run/udev/control exists, create empty if not
     if !control_file.exists() {
+        warn!(
+            "VUI-UDEV-001 — /run/udev/control/ not available. Keyboard or mouse might be unusable."
+        );
+        warn!("Visit https://github.com/joleuger/vuinputd/blob/main/docs/TROUBLESHOOTING.md for details");
+        info!("Creating file /run/udev/control anyway for subsequent runs.");
         File::create(control_file)?;
     }
 
