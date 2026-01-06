@@ -503,8 +503,6 @@ the compositor, via `systemd-logind`, owns a VT, switches it to `KD_GRAPHICS`, a
 
 The missing piece is a **well-defined fallback** for the “no graphical session” case.
 
----
-
 ### **Decision**
 
 `fallbackdm` is implemented as a **logind-managed fallback graphical session**.
@@ -518,7 +516,6 @@ It runs only when **no other graphical session is active** on the seat and exist
 `fallbackdm` itself does **not** manipulate VTs, perform `KDSETMODE` ioctls, or access `/dev/tty` directly.
 All VT and seat handling is delegated to `systemd-logind` **via a standard PAM session**.
 
----
 
 ### **Behavior and Lifecycle**
 
@@ -535,7 +532,6 @@ All VT and seat handling is delegated to `systemd-logind` **via a standard PAM s
 
 `fallbackdm` is non-interactive by design but may display **minimal status information** in the future.
 
----
 
 ### **Rationale**
 
@@ -551,7 +547,6 @@ This design:
 
 Conceptually, `fallbackdm` acts as a **headless placeholder graphical session** that ensures consistent system behavior even when no real graphical environment is running.
 
----
 
 ### **Alternatives Considered**
 
@@ -565,6 +560,22 @@ Conceptually, `fallbackdm` acts as a **headless placeholder graphical session** 
   Rejected, as this may require dummy display devices in headless configurations and adds unnecessary complexity.
 
 ---
+
+### 3.12 Device Policies & Input Sanitization
+
+Exposing raw access to `/dev/uinput` inside a container introduces significant security risks. A malicious process could theoretically emulate a keyboard to execute "BadUSB"-style attacks, trigger kernel-level commands (Magic SysRq), or switch Virtual Terminals (VT) to escape the graphical session.
+
+To mitigate this, `vuinputd` implements an **Active Filtering Layer** (CUSE middleware) that enforces strict device policies before requests reach the host kernel. This is controlled via the `--device-policy` flag.
+
+The filtering operates on two levels (Defense in Depth):
+
+1. **Capability Filtering (`ioctl`):** During device creation, `vuinputd` inspects `UI_SET_KEYBIT`, `UI_SET_RELBIT`, etc. If a container requests capabilities forbidden by the active policy (e.g., a gamepad trying to claim it has a SysRq key), the request is silently ignored or rejected. The resulting device on the host simply lacks those hardware capabilities.
+2. **Event Filtering (`write`):** At runtime, `vuinputd` inspects the stream of input events. It maintains internal state (tracking modifiers like `Alt` or `Ctrl`) to detect and drop dangerous sequences (e.g., `Alt` + `F1-F12` for VT switching) that the capability filter alone cannot block.
+
+**Supported Policies:**
+
+* **`strict-gamepad` (Whitelist):** Designed for console-like isolation. It strictly permits only Gamepad/Joystick events (`EV_KEY` buttons, `EV_ABS` axes). It proactively blocks `EV_REL` (mouse movement) and `ABS_MT` (multitouch), effectively "neutering" complex controllers (like DualSense or Wiimotes) so they cannot be used to hijack the host mouse cursor.
+* **`sanitized` (Blacklist):** Designed for desktop gaming. It allows standard Keyboard and Mouse input but strictly filters dangerous keys (`KEY_SYSRQ`, `KEY_POWER`) and host-management shortcuts (VT switching, CAD), providing a safe "sandboxed keyboard."
 
 ## 4. Security Considerations
 

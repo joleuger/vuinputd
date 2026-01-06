@@ -19,10 +19,30 @@ pub struct VuInputDevice {
 }
 
 #[derive(Debug)]
+pub struct KeyTracker {
+    pub left_alt_down: bool,
+    pub right_alt_down: bool,
+    pub left_ctrl_down: bool,
+    pub right_ctrl_down: bool,
+}
+
+impl KeyTracker {
+    pub fn new() -> Self {
+        Self {
+            left_alt_down: false,
+            right_alt_down: false,
+            left_ctrl_down: false,
+            right_ctrl_down: false,
+        }
+    }
+}
+
+#[derive(Debug)]
 pub struct VuInputState {
     pub file: File,
     pub requesting_process: RequestingProcess,
     pub input_device: Option<VuInputDevice>,
+    pub keytracker: KeyTracker,
 }
 
 #[derive(Debug, Eq, Hash, PartialEq, Clone)]

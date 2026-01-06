@@ -32,6 +32,7 @@ pub mod cuse_device;
 use crate::cuse_device::state::{initialize_dedup_last_error, initialize_vuinput_state};
 use crate::cuse_device::vuinput_make_cuse_ops;
 use crate::cuse_device::vuinput_open::VUINPUT_COUNTER;
+use crate::global_config::DevicePolicy;
 use crate::jobs::monitor_udev_job::MonitorBackgroundLoop;
 
 pub mod process_tools;
@@ -42,6 +43,7 @@ use crate::process_tools::*;
 
 pub mod actions;
 
+pub mod global_config;
 pub mod jobs;
 pub mod vt_tools;
 
@@ -89,6 +91,10 @@ struct Args {
                  Loss of local access may require recovery via SSH or a rescue boot."
     )]
     pub vt_guard: bool,
+
+    /// Enforce a device policy on created devices
+    #[arg(long, value_enum, default_value_t)]
+    device_policy: DevicePolicy,
 }
 
 fn validate_args(args: &Args) -> Result<(), String> {
@@ -181,6 +187,7 @@ fn main() -> std::io::Result<()> {
     check_permissions().expect("failed to read the capabilities of the vuinputd process");
     vt_tools::check_vt_status();
 
+    global_config::initialize_global_config(&args.device_policy);
     initialize_vuinput_state();
     VUINPUT_COUNTER.set(AtomicU64::new(3)).expect(
         "failed to initialize the counter that provides the values of the CUSE file handles",

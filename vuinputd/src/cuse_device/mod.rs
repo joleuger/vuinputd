@@ -2,6 +2,7 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
+pub mod device_policy;
 pub mod state;
 pub mod vuinput_ioctl;
 pub mod vuinput_open;
