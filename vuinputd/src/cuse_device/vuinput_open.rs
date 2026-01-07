@@ -54,7 +54,7 @@ pub unsafe extern "C" fn vuinput_open(
                     file: v,
                     requesting_process,
                     input_device: None,
-                    keytracker: KeyTracker::new()
+                    keytracker: KeyTracker::new(),
                 },
             )
             .unwrap();
