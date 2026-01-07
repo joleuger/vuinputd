@@ -3,6 +3,7 @@
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
 use crate::cuse_device::*;
+use crate::global_config::get_device_policy;
 use ::cuse_lowlevel::*;
 use libc::{__s32, __u16, input_event};
 use libc::{off_t, size_t, EIO};
@@ -87,9 +88,15 @@ pub unsafe extern "C" fn vuinput_write(
     let is_compat = vuinput_state.requesting_process.is_compat;
     // TODO: ARM: && !compat_uses_64bit_time()
 
+    let policy = get_device_policy();
+
     if !is_compat {
         while bytes + normal_size <= _size && result.is_ok() {
-            result = vuinput_state.file.write(&slice[bytes..bytes + normal_size]);
+            let position = _buf.byte_add(bytes);
+            let input_event = position as *const input_event;
+            if device_policy::is_allowed(&mut vuinput_state.keytracker, policy, &*input_event) {
+                result = vuinput_state.file.write(&slice[bytes..bytes + normal_size]);
+            }
             bytes += normal_size;
         }
     } else {
@@ -99,7 +106,9 @@ pub unsafe extern "C" fn vuinput_write(
             let normal = map_to_64_bit(&*compat);
             let normal_ptr = (&normal as *const libc::input_event) as *const u8;
             let slice = std::slice::from_raw_parts(normal_ptr, normal_size);
-            result = vuinput_state.file.write(&slice);
+            if device_policy::is_allowed(&mut vuinput_state.keytracker, policy, &normal) {
+                result = vuinput_state.file.write(&slice);
+            }
             bytes += compat_size;
         }
     };

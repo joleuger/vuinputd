@@ -46,7 +46,7 @@ const BTN_GRIPR2: u16 = 0x227;
 
 use crate::{cuse_device::state::KeyTracker, global_config::DevicePolicy};
 
-fn is_allowed(keytracker: &mut KeyTracker, policy: &DevicePolicy, event: &input_event) -> bool {
+pub fn is_allowed(keytracker: &mut KeyTracker, policy: &DevicePolicy, event: &input_event) -> bool {
     match policy {
         DevicePolicy::None => true,
         DevicePolicy::Sanitized => is_allowed_in_sanitized_mode(keytracker, event),
@@ -61,10 +61,10 @@ fn is_allowed_in_sanitized_mode(keytracker: &mut KeyTracker, event: &input_event
 
     if type_ == EV_KEY {
         match code {
-            v if v == KEY_LEFTALT => keytracker.left_alt_down = value > 0,
-            v if v == KEY_RIGHTALT => keytracker.right_alt_down = value > 0,
-            v if v == KEY_LEFTCTRL => keytracker.left_ctrl_down = value > 0,
-            v if v == KEY_RIGHTCTRL => keytracker.right_ctrl_down = value > 0,
+            KEY_LEFTALT => keytracker.left_alt_down = value > 0,
+            KEY_RIGHTALT => keytracker.right_alt_down = value > 0,
+            KEY_LEFTCTRL => keytracker.left_ctrl_down = value > 0,
+            KEY_RIGHTCTRL => keytracker.right_ctrl_down = value > 0,
             _ => {}
         }
     }

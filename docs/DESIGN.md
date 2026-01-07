@@ -569,7 +569,7 @@ To mitigate this, `vuinputd` implements an **Active Filtering Layer** (CUSE midd
 
 The filtering operates on two levels (Defense in Depth):
 
-1. **Capability Filtering (`ioctl`):** During device creation, `vuinputd` inspects `UI_SET_KEYBIT`, `UI_SET_RELBIT`, etc. If a container requests capabilities forbidden by the active policy (e.g., a gamepad trying to claim it has a SysRq key), the request is silently ignored or rejected. The resulting device on the host simply lacks those hardware capabilities.
+1. **Capability Filtering (`ioctl`):** During device creation, `vuinputd` inspects `UI_SET_KEYBIT`, `UI_SET_RELBIT`, etc. If a container requests capabilities forbidden by the active policy (e.g., a gamepad trying to claim it has a SysRq key), the request is silently ignored or rejected. The resulting device on the host simply lacks those hardware capabilities. This hasn't been implemented, yet.
 2. **Event Filtering (`write`):** At runtime, `vuinputd` inspects the stream of input events. It maintains internal state (tracking modifiers like `Alt` or `Ctrl`) to detect and drop dangerous sequences (e.g., `Alt` + `F1-F12` for VT switching) that the capability filter alone cannot block.
 
 **Supported Policies:**
