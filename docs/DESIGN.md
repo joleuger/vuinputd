@@ -499,9 +499,53 @@ As a result:
 * input devices may interact with the VT layer in unintended ways
 
 When a graphical session is active, these issues do not occur:
-the compositor, via `systemd-logind`, owns a VT, switches it to `KD_GRAPHICS`, and the VT keyboard handler is **suppressed**.
+the compositor, via `systemd-logind`, owns a VT, switches it to `KD_GRAPHICS` and `K_OFF`, and the VT keyboard handler is **suppressed**.
 
 The missing piece is a **well-defined fallback** for the “no graphical session” case.
+
+### **Effect of K_OFF in Linux VT subsystem**
+
+- ioctl KDSKBMODE on /dev/ttyX leads to call of vt_do_kdskbmode
+- kb->kbdmode = VC_OFF
+
+This suppresses the following chains in [keyboard.c](https://github.com/torvalds/linux/blob/master/drivers/tty/vt/keyboard.c)
+Lets take Console_1 via ALT+F2 as an example:
+- kbd_event (Entry Point)
+- kbd_keycode (Translation)
+    - Job: looks up the Keysym in the keymap based on the current modifier state (ALT+F2 is 0xf501 in [defkeymap.c_shipped](https://github.com/torvalds/linux/blob/master/drivers/tty/vt/defkeymap.c_shipped))
+    - type = KTYP(keysym) takes the first 16 bits (which is 0xf5).
+    - type -= 0xf0. (which is 0x05). Note hat the kernel uses the ** offset** `0xf0` to differentiate between characters and special handlers in the keymap. When `type -= 0xf0` is called, it "normalizes" the keysym into an index for the `k_handler` array.
+    - index = KVAL(keysym) takes the last 16 bits (which is 0x01)
+    - return if ((raw_mode || kbd->kbdmode == VC_OFF) && type != KT_SPEC && type != KT_SHIFT), so suppression happens here.
+    - Note that K_HANDLERS[type] == K_HANDLERS[0x05] == k_cons.
+    - if no suppression: call (*k_handler[type])(vc, KVAL(keysym), !down), which is k_cons(vc,0x01)
+
+Lets take Decr_Console via ALT+Left as second example:
+- kbd_event (Entry Point)
+- kbd_keycode (Translation)
+    - Job: looks up the Keysym in the keymap based on the current modifier state (ALT+Left is 0xf210 in [defkeymap.c_shipped](https://github.com/torvalds/linux/blob/master/drivers/tty/vt/defkeymap.c_shipped))
+    - type = KTYP(keysym) takes the first 16 bits (which is 0xf2).
+    - type -= 0xf0. (which is 0x02)
+    - index = KVAL(keysym) takes the last 16 bits (which is 0x10)
+    - return if ((raw_mode || kbd->kbdmode == VC_OFF) && type != KT_SPEC && type != KT_SHIFT), so suppression does *not* happen here.
+    - Note that K_HANDLERS[type] == K_HANDLERS[0x02] == k_spec.
+    - call (*k_handler[type])(vc, KVAL(keysym), !down), which is k_spec(vc,0x10)
+- k_spec (Handling)
+    - Condition if ((... || kbd->kbdmode == VC_OFF) && value != KVAL(K_SAK)) evaluates to false, so suppression happens here
+		- if no suppression: call fn_handler[value](...) which is fn_dec_console(...)
+
+In the KT_SHIFT-case of "return if ((raw_mode || kbd->kbdmode == VC_OFF) && type != KT_SPEC && type != KT_SHIFT", nothing interesting happens in our case: it might enable and disable caps lock. This means uinput can still enable disable caps, which is a bit odd, but nothing tragic in our use cases.
+
+sysrq has an own handler. It is not affected by K_OFF.
+https://github.com/torvalds/linux/blob/master/drivers/tty/sysrq.c#L1048
+
+Raw mode is not relevant.
+
+### The Risk of Non-Standard or User-Loaded Keymaps
+
+While `vuinputd` relies on the default kernel keymap logic for its internal filtering, it is important to note that the host's active keymap can be modified at runtime (e.g., via `loadkeys` or `systemd-vconsole-setup`). Because the kernel's `K_OFF` logic (triggered by `KDSKBMODE`) explicitly whitelists the `K_SAK` (Secure Attention Key) keysym, any user-defined key combination mapped to `SAK` will bypass the kernel's own input suppression.
+
+To further mitigate these risks, `vuinputd` could be extended to parse the host's active keymap during startup, allowing the sanitizer to dynamically identify and filter any physical keycode mapped to a sensitive keysym like `K_SAK`. This is currently not planned. Alternatively, on systems dedicated to containerization where full host TTY access is not required, administrators can load a "hardened" keymap stripped of all `Console_N`, `Boot`, and `SAK` assignments. By combining a minimized host keymap with `vuinputd`'s CUSE-level filtering, the system achieves a robust "Defense in Depth" that protects against both accidental triggers and intentional container escapes.
 
 ### **Decision**
 

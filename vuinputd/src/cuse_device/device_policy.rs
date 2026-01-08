@@ -93,13 +93,20 @@ fn is_allowed_in_sanitized_mode(keytracker: &mut KeyTracker, event: &input_event
             return false;
         }
 
-        // 3. Block CAD (Ctrl + Alt + Del)
+        // 3. Block CAD (Ctrl + Alt + Del).
         // Block basically all Boot from defkeymap.map
         if alt_down && ctrl_down && (code == KEY_DELETE || code == KEY_KPDOT) {
             return false;
         }
 
-        // 4. Block standalone dangerous keys
+        // 4. Block SAK (CTRL+ALT+PAUSE). seems not to be mapped
+        // This one is crucial, because it is allowed even in K_OFF mode.
+        // https://github.com/torvalds/linux/blob/master/drivers/tty/vt/keyboard.c
+        // It seems not to be mapped by default, but close the potential hole if a
+        // distro follows the ancient https://www.kernel.org/doc/Documentation/SAK.txt
+
+        
+        // 5. Block standalone dangerous keys
         match code {
             KEY_POWER | KEY_SLEEP | KEY_WAKEUP => return false,
             _ => {}
@@ -108,26 +115,33 @@ fn is_allowed_in_sanitized_mode(keytracker: &mut KeyTracker, event: &input_event
     true
 }
 
-fn is_allowed_in_strict_gamepad_mode(keytracker: &mut KeyTracker, event: &input_event) -> bool {
-    let type_ = event.type_;
-    let code = event.code;
+fn is_allowed_in_strict_gamepad_mode(
+    _keytracker: &mut KeyTracker,
+    event: &input_event,
+) -> bool {
+    match event.type_ {
+        EV_SYN => true,
 
-    if type_ == EV_SYN {
-        return true;
-    }
-    if type_ == EV_ABS {
-        return true;
-    }
-    if type_ == EV_FF {
-        return true;
-    }
+        // Analog sticks, triggers
+        EV_ABS => true,
 
-    if type_ == EV_KEY {
-        return match code {
-            BTN_SOUTH..BTN_THUMBR => true,
-            BTN_DPAD_UP..BTN_GRIPR2 => true,
+        // Force feedback
+        EV_FF => true,
+
+        // Digital buttons only
+        EV_KEY => match event.code {
+            // Standard gamepad face + shoulder + stick buttons
+            BTN_SOUTH..=BTN_THUMBR => true,
+
+            // D-Pad + extended gamepad buttons (triggers, paddles)
+            BTN_DPAD_UP..=BTN_GRIPR2 => true,
+
+            // Everything else is rejected (KEY_*, mouse buttons, etc.)
             _ => false,
-        };
+        },
+
+        // Explicitly reject everything else (EV_REL, EV_MSC, etc.)
+        _ => false,
     }
-    false
 }
+
