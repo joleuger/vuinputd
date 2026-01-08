@@ -555,7 +555,7 @@ It runs only when **no other graphical session is active** on the seat and exist
 
 * open a regular logind session **of class `greeter**`
 * occupy the assigned VT
-* let logind switch the VT to `KD_GRAPHICS` **and mute the keyboard handler**
+* let logind switch the VT to `KD_GRAPHICS` and `K_OFF` **and mute the keyboard handler**
 
 `fallbackdm` itself does **not** manipulate VTs, perform `KDSETMODE` ioctls, or access `/dev/tty` directly.
 All VT and seat handling is delegated to `systemd-logind` **via a standard PAM session**.
@@ -574,7 +574,7 @@ All VT and seat handling is delegated to `systemd-logind` **via a standard PAM s
 * when the graphical session ends:
   * `fallbackdm` may be restarted to reclaim the fallback role
 
-`fallbackdm` is non-interactive by design but may display **minimal status information** in the future.
+`fallbackdm` is non-interactive by design but may display **minimal status information** in the future. `fallbackdm` could also be extended to listen itself to the console switches from evdev devices that are actually connected to the seat and signal vuinputd to mute virtual devices accordingly.
 
 
 ### **Rationale**
