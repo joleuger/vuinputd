@@ -35,6 +35,12 @@ const KEY_KPDOT: u16 = 83;
 const KEY_POWER: u16 = 116;
 const KEY_SLEEP: u16 = 142;
 const KEY_WAKEUP: u16 = 143;
+const KEY_BREAK: u16 = 0x19b;
+const KEY_PAUSE: u16 = 119;
+const KEY_RESTART: u16 = 0x198;
+
+const KEY_FN: u16 = 0x1d0;
+// TODO: Should we block range until KEY_FN_RIGHT_SHIFT?
 
 // Gamepad keys from https://github.com/torvalds/linux/blob/master/Documentation/input/gamepad.rst
 // First range
@@ -49,9 +55,17 @@ use crate::{cuse_device::state::KeyTracker, global_config::DevicePolicy};
 pub fn is_allowed(keytracker: &mut KeyTracker, policy: &DevicePolicy, event: &input_event) -> bool {
     match policy {
         DevicePolicy::None => true,
+        DevicePolicy::MuteSysRq => is_allowed_in_mute_sysrq(keytracker, event),
         DevicePolicy::Sanitized => is_allowed_in_sanitized_mode(keytracker, event),
         DevicePolicy::StrictGamepad => is_allowed_in_strict_gamepad_mode(keytracker, event),
     }
+}
+
+fn is_allowed_in_mute_sysrq(keytracker: &mut KeyTracker, event: &input_event) -> bool {
+    if event.type_ == EV_KEY && event.code == KEY_SYSRQ {
+        return false;
+    } 
+    true
 }
 
 fn is_allowed_in_sanitized_mode(keytracker: &mut KeyTracker, event: &input_event) -> bool {
@@ -93,6 +107,11 @@ fn is_allowed_in_sanitized_mode(keytracker: &mut KeyTracker, event: &input_event
             return false;
         }
 
+        // TODO:
+        // keycode  84 = Last_Console
+        // alt keycode 105 = Decr_Console
+        // alt keycode 106 = Incr_Console
+
         // 3. Block CAD (Ctrl + Alt + Del).
         // Block basically all Boot from defkeymap.map
         if alt_down && ctrl_down && (code == KEY_DELETE || code == KEY_KPDOT) {
@@ -105,20 +124,18 @@ fn is_allowed_in_sanitized_mode(keytracker: &mut KeyTracker, event: &input_event
         // It seems not to be mapped by default, but close the potential hole if a
         // distro follows the ancient https://www.kernel.org/doc/Documentation/SAK.txt
 
-        
         // 5. Block standalone dangerous keys
         match code {
-            KEY_POWER | KEY_SLEEP | KEY_WAKEUP => return false,
+            KEY_POWER | KEY_SLEEP | KEY_WAKEUP | KEY_FN | KEY_BREAK | KEY_PAUSE | KEY_RESTART => {
+                return false
+            }
             _ => {}
         }
     }
     true
 }
 
-fn is_allowed_in_strict_gamepad_mode(
-    _keytracker: &mut KeyTracker,
-    event: &input_event,
-) -> bool {
+fn is_allowed_in_strict_gamepad_mode(_keytracker: &mut KeyTracker, event: &input_event) -> bool {
     match event.type_ {
         EV_SYN => true,
 
@@ -144,4 +161,3 @@ fn is_allowed_in_strict_gamepad_mode(
         _ => false,
     }
 }
-

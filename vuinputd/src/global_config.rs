@@ -20,8 +20,10 @@ pub static CONFIG: OnceLock<GlobalConfig> = OnceLock::new();
 #[clap(rename_all = "kebab-case")] // This ensures StrictGamepad becomes "strict-gamepad"
 pub enum DevicePolicy {
     /// Allow all device capabilities
-    #[default]
     None,
+    #[default]
+    /// Default: Block SysRq
+    MuteSysRq,
     /// Default: Allow keyboards/mice but block dangerous keys (SysRq, VT switching)
     Sanitized,
     /// Only allow Gamepad-like devices. Block mice and keyboards.
