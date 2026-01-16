@@ -4,10 +4,13 @@ version = "0.1.0"
 edition = "2021"
 
 [[bin]]
+name = "test-ipc"
+
+[[bin]]
 name = "test-keyboard"
 
 [[bin]]
-name = "bwrap-ipc"
+name = "test-ok"
 
 [dependencies]
 uinput-ioctls = { path = "../uinput-ioctls" }
@@ -23,3 +26,4 @@ serde_json = "1.0"
 requires-privileges = []
 requires-uinput = []
 requires-bwrap = []
+requires-podman = []

@@ -2,12 +2,25 @@
 
 ## Integration tests
 
+### With bubblewrap
+
 Install bubblewrap:
 `apt-get install bubblewrap`.
 
 Run with `cargo test -p vuinputd-tests --features "requires-privileges requires-uinput requires-bwrap"`.
 
+### With podman
 
+Install podman:
+`apt-get install podman`.
+
+Create test container for podman
+```
+cargo build -p vuinputd-tests
+podman build -t vuinputd-tests -f vuinputd-tests/podman/Containerfile .
+```
+
+Run with `cargo test -p vuinputd-tests --features "requires-privileges requires-uinput requires-podman"`.
 
 ## Performance tests
 

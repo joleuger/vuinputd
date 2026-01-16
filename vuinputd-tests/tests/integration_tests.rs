@@ -26,7 +26,7 @@ fn test_bwrap_simple() {
 #[cfg(all(feature = "requires-privileges", feature = "requires-bwrap"))]
 #[test]
 fn test_bwrap_ipc() {
-    let bwrap_ipc = env!("CARGO_BIN_EXE_bwrap-ipc");
+    let bwrap_ipc = env!("CARGO_BIN_EXE_test-ipc");
 
     let (builder, ipc) = bwrap::BwrapBuilder::new()
         .unshare_all()

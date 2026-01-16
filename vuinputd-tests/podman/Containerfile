@@ -1,0 +1,8 @@
+# Build from project root
+# > cargo build -p vuinputd-tests
+# > podman build -t vuinputd-tests -f vuinputd-tests/podman/Containerfile .
+
+FROM ubuntu:24.04
+COPY target/debug/test-ipc /test-ipc
+COPY target/debug/test-keyboard /test-keyboard
+COPY target/debug/test-ok /test-ok

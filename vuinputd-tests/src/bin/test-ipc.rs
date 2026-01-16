@@ -5,10 +5,10 @@
 use core::panic;
 use std::time::Duration;
 
-use vuinputd_tests::bwrap::SandboxChildIpc;
+use vuinputd_tests::ipc::SandboxChildIpc;
 
 fn main() {
-    println!("starting bwrap-ipc");
+    println!("starting test-ipc");
     let ipc = unsafe { SandboxChildIpc::from_fd() };
 
     let incoming = ipc
