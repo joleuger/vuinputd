@@ -1,8 +1,9 @@
 # Build from project root
 # > cargo build -p vuinputd-tests
-# > podman build -t vuinputd-tests -f vuinputd-tests/podman/Containerfile .
+# > podman build --dns 1.1.1.1 -t vuinputd-tests -f vuinputd-tests/podman/Containerfile .
 
 FROM ubuntu:24.04
+RUN apt-get update && apt-get install -yy strace && apt-get clean
 COPY target/debug/test-ipc /test-ipc
 COPY target/debug/test-keyboard /test-keyboard
 COPY target/debug/test-ok /test-ok

@@ -35,7 +35,7 @@ impl PodmanBuilder {
     }
 
     /// `podman run`
-    fn run_cmd(mut self) -> Self {
+    pub fn run_cmd(mut self) -> Self {
         self.args.push("run".into());
         self
     }
@@ -69,6 +69,11 @@ impl PodmanBuilder {
     pub fn device(mut self, spec: &str) -> Self {
         self.args.push("--device".into());
         self.args.push(spec.into());
+        self
+    }
+
+    pub fn allow_input_devices(mut self) -> Self {
+        self.args.push("--device-cgroup-rule=\"c 13:* rwm\"".into());
         self
     }
 
@@ -117,6 +122,8 @@ impl PodmanBuilder {
 
         // Child side must become FD 3 inside container
         self.ipc_child_fd = Some(child);
+
+        self.args.push("--preserve-fds=1".into());
 
         Ok((self, SandboxIpc { sock: parent_sock }))
     }

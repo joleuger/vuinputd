@@ -17,7 +17,7 @@ Install podman:
 Create test container for podman
 ```
 cargo build -p vuinputd-tests
-podman build -t vuinputd-tests -f vuinputd-tests/podman/Containerfile .
+podman build --dns 1.1.1.1 -t vuinputd-tests -f vuinputd-tests/podman/Containerfile .
 ```
 
 Run with `cargo test -p vuinputd-tests --features "requires-privileges requires-uinput requires-podman"`.
