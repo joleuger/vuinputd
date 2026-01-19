@@ -126,8 +126,9 @@ on your container setup and isolation model.
 #### `--placement on-host`
 
 * Device nodes and udev runtime data are created **on the host** under:
-  * `/run/vuinputd/{devname}/dev`
-  * `/run/vuinputd/{devname}/udev/data`
+  * `/run/vuinputd/{devname}/dev-input`
+  * `/run/vuinputd/{devname}/udev`
+* `/run/vuinputd/{devname}/dev-input` **must** have the mount option `dev`
 * The user is expected to **bind-mount these directories** into the container
 * Suitable for:
   * read-only containers

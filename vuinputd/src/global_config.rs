@@ -9,6 +9,7 @@ use std::sync::OnceLock;
 pub struct GlobalConfig {
     pub policy: DevicePolicy,
     pub placement: Placement,
+    pub devname: String,
 }
 
 // The actual static variable. It starts empty and is set once in main().
@@ -33,18 +34,23 @@ pub enum DevicePolicy {
 pub enum Placement {
     #[default]
     /// Create inside the container
-    Inject,
+    InContainer,
     /// Create on the host (user is expected to bind-mount)
-    Host,
-    /// Do not create any artifacts
+    OnHost,
+    /// Do not create any artifacts (netlink message in container is unaffected)
     None,
 }
 
-pub fn initialize_global_config(device_policy: &DevicePolicy, placement: &Placement) {
+pub fn initialize_global_config(
+    device_policy: &DevicePolicy,
+    placement: &Placement,
+    devname: &Option<String>,
+) {
     if CONFIG
         .set(GlobalConfig {
             policy: device_policy.clone(),
             placement: placement.clone(),
+            devname: devname.clone().unwrap_or("vuinput".to_string()),
         })
         .is_err()
     {
@@ -59,4 +65,8 @@ pub fn get_device_policy<'a>() -> &'a DevicePolicy {
 
 pub fn get_placement<'a>() -> &'a Placement {
     &CONFIG.get().unwrap().placement
+}
+
+pub fn get_devname<'a>() -> &'a String {
+    &CONFIG.get().unwrap().devname
 }

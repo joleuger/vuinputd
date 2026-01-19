@@ -21,18 +21,20 @@ fn handle_action(action: Action) -> anyhow::Result<()> {
             input_device::ensure_input_device(path, major.into(), minor.into())?;
             Ok(())
         }
-        Action::EmitUdevEvent {
-            netlink_message,
+        Action::WriteUdevRuntimeData {
             runtime_data,
             major,
             minor,
         } => {
-            netlink_message::send_udev_monitor_message_with_properties(netlink_message);
-            runtime_data::ensure_udev_structure()?;
+            runtime_data::ensure_udev_structure("/run",true)?;
             match runtime_data {
-                Some(data) => runtime_data::write_udev_data(&data, major.into(), minor.into())?,
-                None => runtime_data::delete_udev_data(major.into(), minor.into())?,
+                Some(data) => runtime_data::write_udev_data("/run",&data, major.into(), minor.into())?,
+                None => runtime_data::delete_udev_data("/run",major.into(), minor.into())?,
             }
+            Ok(())
+        }
+        Action::EmitNetlinkMessage { netlink_message } => {
+            netlink_message::send_udev_monitor_message_with_properties(netlink_message);
             Ok(())
         }
         Action::RemoveDevice { path, major, minor } => {

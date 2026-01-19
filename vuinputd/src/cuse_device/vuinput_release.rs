@@ -3,7 +3,7 @@
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
 use crate::job_engine::JOB_DISPATCHER;
-use crate::jobs::remove_from_container_job::RemoveFromContainerJob;
+use crate::jobs::remove_device_job::{self, RemoveDeviceJob};
 use crate::process_tools::SELF_NAMESPACES;
 use crate::{cuse_device::*, jobs};
 use ::cuse_lowlevel::*;
@@ -32,7 +32,7 @@ pub unsafe extern "C" fn vuinput_release(
             .equal_mnt_and_net(&vuinput_state.requesting_process.namespaces)
     {
         let input_device = input_device.unwrap();
-        let remove_job = RemoveFromContainerJob::new(
+        let remove_job = RemoveDeviceJob::new(
             vuinput_state.requesting_process.clone(),
             input_device.devnode.clone(),
             input_device.syspath.clone(),
@@ -46,7 +46,7 @@ pub unsafe extern "C" fn vuinput_release(
             .lock()
             .unwrap()
             .dispatch(Box::new(remove_job));
-        awaiter(&jobs::remove_from_container_job::State::Finished);
+        awaiter(&jobs::remove_device_job::State::Finished);
     }
 
     drop(vuinput_state);

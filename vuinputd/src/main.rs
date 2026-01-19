@@ -191,7 +191,7 @@ fn main() -> std::io::Result<()> {
     check_permissions().expect("failed to read the capabilities of the vuinputd process");
     vt_tools::check_vt_status();
 
-    global_config::initialize_global_config(&args.device_policy, &args.placement);
+    global_config::initialize_global_config(&args.device_policy, &args.placement, &args.devname);
     initialize_vuinput_state();
     VUINPUT_COUNTER.set(AtomicU64::new(3)).expect(
         "failed to initialize the counter that provides the values of the CUSE file handles",

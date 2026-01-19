@@ -9,11 +9,13 @@ use std::path::Path;
 use log::{info, warn};
 
 /// Ensure required udev directories and files exist
-pub fn ensure_udev_structure() -> io::Result<()> {
+pub fn ensure_udev_structure(path_prefix: &str, warn_if_nonexistent: bool) -> io::Result<()> {
     // Note that this structure _must_ exist, before a service using libinput is run. The time of device creation might be too late.
 
-    let data_dir = Path::new("/run/udev/data");
-    let control_file = Path::new("/run/udev/control");
+    let data_dir = format!("{}/udev/data", path_prefix);
+    let data_dir = Path::new(&data_dir);
+    let control_file = format!("{}/udev/control", path_prefix);
+    let control_file = Path::new(&control_file);
 
     // Create directory like `mkdir -p`
     if !data_dir.exists() {
@@ -42,7 +44,7 @@ pub fn ensure_udev_structure() -> io::Result<()> {
 ///  - remove all lines containing `seat_` references (G:, Q: lines)
 ///  - replace ID_VUINPUT_* with ID_INPUT_*
 ///  - write updated content to `/run/udev/data/c<major>:<minor>`
-pub fn write_udev_data(content: &str, major: u64, minor: u64) -> io::Result<()> {
+pub fn write_udev_data(path_prefix: &str, content: &str, major: u64, minor: u64) -> io::Result<()> {
     let mut cleaned = String::new();
 
     for line in content.lines() {
@@ -60,7 +62,7 @@ pub fn write_udev_data(content: &str, major: u64, minor: u64) -> io::Result<()> 
         cleaned.push('\n');
     }
 
-    let path = format!("/run/udev/data/c{}:{}", major, minor);
+    let path = format!("{}/udev/data/c{}:{}", path_prefix, major, minor);
     let mut file = File::create(&path)?;
     file.write_all(cleaned.as_bytes())?;
 
@@ -69,8 +71,8 @@ pub fn write_udev_data(content: &str, major: u64, minor: u64) -> io::Result<()> 
 
 /// Delete udev data for a given major/minor number
 /// - `major`, `minor` = device numbers
-pub fn delete_udev_data(major: u64, minor: u64) -> io::Result<()> {
-    let path = format!("/run/udev/data/c{}:{}", major, minor);
+pub fn delete_udev_data(path_prefix: &str, major: u64, minor: u64) -> io::Result<()> {
+    let path = format!("{}/udev/data/c{}:{}", path_prefix, major, minor);
     fs::remove_file(&path)?;
     Ok(())
 }

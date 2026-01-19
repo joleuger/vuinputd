@@ -13,9 +13,9 @@ use uinput_ioctls::*;
 
 use crate::cuse_device::{get_vuinput_state, VuFileHandle};
 use crate::job_engine::JOB_DISPATCHER;
-use crate::jobs::emit_udev_event_in_container_job::EmitUdevEventInContainerJob;
-use crate::jobs::mknod_device_in_container_job::MknodDeviceInContainerJob;
-use crate::jobs::remove_from_container_job::RemoveFromContainerJob;
+use crate::jobs::emit_udev_event_job::EmitUdevEventJob;
+use crate::jobs::mknod_device_job::MknodDeviceJob;
+use crate::jobs::remove_device_job::RemoveDeviceJob;
 use crate::process_tools::SELF_NAMESPACES;
 use crate::{cuse_device::*, jobs};
 
@@ -164,7 +164,7 @@ pub unsafe extern "C" fn vuinput_ioctl(
                 CStr::from_ptr(resultbuf.as_ptr()).to_string_lossy()
             );
             debug!("fh {}: syspath: {}", fh, sysname);
-            let devnode = fetch_device_node(&sysname).unwrap();
+            let (devname, devnode) = fetch_device_node(&sysname).unwrap();
             debug!("fh {}: devnode: {}", fh, devnode);
             let (major, minor) = fetch_major_minor(&devnode).unwrap();
             debug!("fh {}: major: {} minor: {} ", fh, major, minor);
@@ -181,9 +181,9 @@ pub unsafe extern "C" fn vuinput_ioctl(
                 .unwrap()
                 .equal_mnt_and_net(&vuinput_state.requesting_process.namespaces)
             {
-                let mknod_job = MknodDeviceInContainerJob::new(
+                let mknod_job = MknodDeviceJob::new(
                     vuinput_state.requesting_process.clone(),
-                    devnode.clone(),
+                    devname.clone(),
                     sysname.clone(),
                     major,
                     minor,
@@ -195,12 +195,12 @@ pub unsafe extern "C" fn vuinput_ioctl(
                     .lock()
                     .unwrap()
                     .dispatch(Box::new(mknod_job));
-                awaiter(&jobs::mknod_device_in_container_job::State::Finished);
+                awaiter(&jobs::mknod_device_job::State::Finished);
                 debug!("fh {}: mknod_device in container has been finished ", fh);
                 fuse_lowlevel::fuse_reply_ioctl(_req, 0, std::ptr::null(), 0);
 
                 // we do not wait for the udev stuff
-                let emit_udev_event_job = EmitUdevEventInContainerJob::new(
+                let emit_udev_event_job = EmitUdevEventJob::new(
                     vuinput_state.requesting_process.clone(),
                     devnode.clone(),
                     sysname.clone(),
@@ -229,7 +229,7 @@ pub unsafe extern "C" fn vuinput_ioctl(
                     .equal_mnt_and_net(&vuinput_state.requesting_process.namespaces)
             {
                 let input_device = input_device.unwrap();
-                let remove_job = RemoveFromContainerJob::new(
+                let remove_job = RemoveDeviceJob::new(
                     vuinput_state.requesting_process.clone(),
                     input_device.devnode.clone(),
                     input_device.syspath.clone(),
@@ -243,7 +243,7 @@ pub unsafe extern "C" fn vuinput_ioctl(
                     .lock()
                     .unwrap()
                     .dispatch(Box::new(remove_job));
-                awaiter(&jobs::remove_from_container_job::State::Finished);
+                awaiter(&jobs::remove_device_job::State::Finished);
                 debug!(
                     "fh {}: removing dev-nodes from container has been finished ",
                     fh
@@ -415,12 +415,12 @@ pub unsafe extern "C" fn vuinput_ioctl(
     }
 }
 
-pub fn fetch_device_node(path: &str) -> io::Result<String> {
+pub fn fetch_device_node(path: &str) -> io::Result<(String, String)> {
     for entry in fs::read_dir(path)? {
         let entry = entry?; // propagate per-entry errors
         if let Some(name) = entry.file_name().to_str() {
             if name.starts_with("event") {
-                return Ok(format!("/dev/input/{}", name));
+                return Ok((name.to_string(), format!("/dev/input/{}", name)));
             }
         }
     }

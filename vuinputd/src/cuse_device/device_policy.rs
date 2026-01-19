@@ -61,10 +61,10 @@ pub fn is_allowed(keytracker: &mut KeyTracker, policy: &DevicePolicy, event: &in
     }
 }
 
-fn is_allowed_in_mute_sysrq(keytracker: &mut KeyTracker, event: &input_event) -> bool {
+fn is_allowed_in_mute_sysrq(_keytracker: &mut KeyTracker, event: &input_event) -> bool {
     if event.type_ == EV_KEY && event.code == KEY_SYSRQ {
         return false;
-    } 
+    }
     true
 }
 

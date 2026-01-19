@@ -14,7 +14,12 @@ use async_io::Timer;
 use log::debug;
 
 use crate::{
-    actions::{action::Action, runtime_data::read_udev_data},
+    actions::{
+        self,
+        action::Action,
+        runtime_data::{self, read_udev_data},
+    },
+    global_config::{self, get_placement, Placement},
     job_engine::job::{Job, JobTarget},
     jobs::monitor_udev_job::EVENT_STORE,
     process_tools::{self, await_process, Pid, RequestingProcess},
@@ -28,7 +33,7 @@ pub enum State {
 }
 
 #[derive(Clone, Debug)]
-pub struct EmitUdevEventInContainerJob {
+pub struct EmitUdevEventJob {
     requesting_process: RequestingProcess,
     target: JobTarget,
     dev_path: String,
@@ -38,7 +43,7 @@ pub struct EmitUdevEventInContainerJob {
     sync_state: Arc<(Mutex<State>, Condvar)>,
 }
 
-impl EmitUdevEventInContainerJob {
+impl EmitUdevEventJob {
     pub fn new(
         requesting_process: RequestingProcess,
         dev_path: String,
@@ -79,7 +84,7 @@ impl EmitUdevEventInContainerJob {
     }
 }
 
-impl Job for EmitUdevEventInContainerJob {
+impl Job for EmitUdevEventJob {
     fn desc(&self) -> &str {
         "emit udev event into container"
     }
@@ -88,8 +93,8 @@ impl Job for EmitUdevEventInContainerJob {
         false
     }
 
-    fn create_task(self: &EmitUdevEventInContainerJob) -> Pin<Box<dyn Future<Output = ()>>> {
-        Box::pin(self.clone().inject_in_container())
+    fn create_task(self: &EmitUdevEventJob) -> Pin<Box<dyn Future<Output = ()>>> {
+        Box::pin(self.clone().emit_udev_event())
     }
 
     fn job_target(&self) -> JobTarget {
@@ -97,8 +102,8 @@ impl Job for EmitUdevEventInContainerJob {
     }
 }
 
-impl EmitUdevEventInContainerJob {
-    async fn inject_in_container(self) {
+impl EmitUdevEventJob {
+    async fn emit_udev_event(self) {
         // temporary hack that needs to be replaced. We try 50 times
         // Should be: Wait for the device to be created, the runtime data to be written and the
         // netlink message to be sent
@@ -144,18 +149,46 @@ impl EmitUdevEventInContainerJob {
         let runtime_data = runtime_data.unwrap();
         let netlink_data = netlink_data.unwrap();
 
-        let emit_udev_event_action = Action::EmitUdevEvent {
+        match get_placement() {
+            Placement::InContainer => {
+                let write_udev_runtime_data = Action::WriteUdevRuntimeData {
+                    runtime_data: Some(runtime_data),
+                    major: self.major,
+                    minor: self.minor,
+                };
+
+                let child_pid =
+                    process_tools::start_action(write_udev_runtime_data, &self.requesting_process)
+                        .expect("subprocess should work");
+
+                let _exit_info = await_process(Pid::Pid(child_pid)).await.unwrap();
+            }
+            Placement::OnHost => {
+                let path_prefix = format!("/run/vuinputd/{}", global_config::get_devname());
+                runtime_data::write_udev_data(
+                    &path_prefix,
+                    &runtime_data,
+                    self.major.into(),
+                    self.minor.into(),
+                )
+                .expect(&format!(
+                    "VUI-UDEV-002: could not write into {}",
+                    &path_prefix
+                )); //TODO: somewhat costly
+            }
+            Placement::None => {}
+        }
+
+        // this is always in the container
+        let emit_netlink_message = Action::EmitNetlinkMessage {
             netlink_message: netlink_data.clone(),
-            runtime_data: Some(runtime_data),
-            major: self.major,
-            minor: self.minor,
         };
 
-        let child_pid =
-            process_tools::start_action(emit_udev_event_action, &self.requesting_process)
-                .expect("subprocess should work");
+        let child_pid = process_tools::start_action(emit_netlink_message, &self.requesting_process)
+            .expect("subprocess should work");
 
         let _exit_info = await_process(Pid::Pid(child_pid)).await.unwrap();
+
         self.set_state(&State::Finished);
     }
 }

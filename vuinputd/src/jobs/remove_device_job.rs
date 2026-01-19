@@ -12,6 +12,7 @@ use log::debug;
 
 use crate::{
     actions::action::Action,
+    global_config::{self, Placement},
     job_engine::job::{Job, JobTarget},
     jobs::monitor_udev_job::EVENT_STORE,
     process_tools::{self, await_process, Pid, RequestingProcess},
@@ -25,7 +26,7 @@ pub enum State {
 }
 
 #[derive(Clone, Debug)]
-pub struct RemoveFromContainerJob {
+pub struct RemoveDeviceJob {
     requesting_process: RequestingProcess,
     target: JobTarget,
     dev_path: String,
@@ -35,7 +36,7 @@ pub struct RemoveFromContainerJob {
     sync_state: Arc<(Mutex<State>, Condvar)>,
 }
 
-impl RemoveFromContainerJob {
+impl RemoveDeviceJob {
     pub fn new(
         requesting_process: RequestingProcess,
         dev_path: String,
@@ -75,7 +76,7 @@ impl RemoveFromContainerJob {
     }
 }
 
-impl Job for RemoveFromContainerJob {
+impl Job for RemoveDeviceJob {
     fn desc(&self) -> &str {
         "Remove input device from container"
     }
@@ -84,8 +85,8 @@ impl Job for RemoveFromContainerJob {
         false
     }
 
-    fn create_task(self: &RemoveFromContainerJob) -> Pin<Box<dyn Future<Output = ()>>> {
-        Box::pin(self.clone().remove_from_container())
+    fn create_task(self: &RemoveDeviceJob) -> Pin<Box<dyn Future<Output = ()>>> {
+        Box::pin(self.clone().remove_device())
     }
 
     fn job_target(&self) -> JobTarget {
@@ -93,8 +94,8 @@ impl Job for RemoveFromContainerJob {
     }
 }
 
-impl RemoveFromContainerJob {
-    async fn remove_from_container(self) {
+impl RemoveDeviceJob {
+    async fn remove_device(self) {
         self.set_state(&State::Started);
 
         let netlink_event = match EVENT_STORE
@@ -124,29 +125,50 @@ impl RemoveFromContainerJob {
 
         let _ = netlink_data.insert("ACTION".to_string(), "remove".to_string());
 
-        let remove_device_action = Action::RemoveDevice {
-            path: dev_path.clone(),
-            major: self.major,
-            minor: self.minor,
-        };
+        match global_config::get_placement() {
+            Placement::InContainer => {
+                let remove_device_action = Action::RemoveDevice {
+                    path: dev_path.clone(),
+                    major: self.major,
+                    minor: self.minor,
+                };
 
-        let child_pid_1 =
-            process_tools::start_action(remove_device_action, &self.requesting_process)
+                let child_pid_1 =
+                    process_tools::start_action(remove_device_action, &self.requesting_process)
+                        .expect("subprocess should work");
+
+                let write_udev_runtime_data_action = Action::WriteUdevRuntimeData {
+                    runtime_data: None,
+                    major: self.major,
+                    minor: self.minor,
+                };
+
+                let child_pid_2 = process_tools::start_action(
+                    write_udev_runtime_data_action,
+                    &self.requesting_process,
+                )
                 .expect("subprocess should work");
 
-        let emit_udev_event_action = Action::EmitUdevEvent {
+                let _exit_info = await_process(Pid::Pid(child_pid_1)).await;
+                let _exit_info = await_process(Pid::Pid(child_pid_2)).await;
+            }
+            Placement::OnHost => {
+                todo!();
+            }
+            Placement::None => {}
+        }
+
+        // this is always in the container
+        let emit_netlink_message = Action::EmitNetlinkMessage {
             netlink_message: netlink_data.clone(),
-            runtime_data: None,
-            major: self.major,
-            minor: self.minor,
         };
 
-        let child_pid_2 =
-            process_tools::start_action(emit_udev_event_action, &self.requesting_process)
+        let child_pid_netlink =
+            process_tools::start_action(emit_netlink_message, &self.requesting_process)
                 .expect("subprocess should work");
 
-        let _exit_info = await_process(Pid::Pid(child_pid_1)).await;
-        let _exit_info = await_process(Pid::Pid(child_pid_2)).await;
+        let _exit_info = await_process(Pid::Pid(child_pid_netlink)).await;
+
         self.set_state(&State::Finished);
     }
 }

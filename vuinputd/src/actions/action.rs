@@ -16,12 +16,16 @@ pub enum Action {
         minor: u64,
     },
 
-    #[serde(rename = "emit-udev-event")]
-    EmitUdevEvent {
-        netlink_message: HashMap<String, String>,
+    #[serde(rename = "write-udev-runtime-data")]
+    WriteUdevRuntimeData {
         runtime_data: Option<String>,
         major: u64,
         minor: u64,
+    },
+
+    #[serde(rename = "emit-netlink-message")]
+    EmitNetlinkMessage {
+        netlink_message: HashMap<String, String>,
     },
 
     #[serde(rename = "remove-device")]

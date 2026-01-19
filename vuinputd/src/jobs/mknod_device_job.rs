@@ -9,10 +9,13 @@ use std::{
 };
 
 use crate::{
-    actions::action::Action,
+    actions::{action::Action, input_device},
+    global_config::{self, Placement},
     job_engine::job::{Job, JobTarget},
     process_tools::{self, await_process, Pid, RequestingProcess},
 };
+
+use crate::actions::runtime_data::write_udev_data;
 
 #[derive(Clone, Debug, Copy, PartialOrd, PartialEq)]
 pub enum State {
@@ -22,20 +25,20 @@ pub enum State {
 }
 
 #[derive(Clone, Debug)]
-pub struct MknodDeviceInContainerJob {
+pub struct MknodDeviceJob {
     requesting_process: RequestingProcess,
     target: JobTarget,
-    dev_path: String,
+    devname: String,
     sys_path: String,
     major: u64,
     minor: u64,
     sync_state: Arc<(Mutex<State>, Condvar)>,
 }
 
-impl MknodDeviceInContainerJob {
+impl MknodDeviceJob {
     pub fn new(
         requesting_process: RequestingProcess,
-        dev_path: String,
+        devname: String,
         sys_path: String,
         major: u64,
         minor: u64,
@@ -43,7 +46,7 @@ impl MknodDeviceInContainerJob {
         Self {
             requesting_process: requesting_process.clone(),
             target: JobTarget::Container(requesting_process),
-            dev_path: dev_path,
+            devname: devname,
             sys_path: sys_path,
             major: major,
             minor: minor,
@@ -73,7 +76,7 @@ impl MknodDeviceInContainerJob {
     }
 }
 
-impl Job for MknodDeviceInContainerJob {
+impl Job for MknodDeviceJob {
     fn desc(&self) -> &str {
         "mknod input device in container"
     }
@@ -82,8 +85,8 @@ impl Job for MknodDeviceInContainerJob {
         false
     }
 
-    fn create_task(self: &MknodDeviceInContainerJob) -> Pin<Box<dyn Future<Output = ()>>> {
-        Box::pin(self.clone().inject_in_container())
+    fn create_task(self: &MknodDeviceJob) -> Pin<Box<dyn Future<Output = ()>>> {
+        Box::pin(self.clone().mknod_device())
     }
 
     fn job_target(&self) -> JobTarget {
@@ -91,18 +94,35 @@ impl Job for MknodDeviceInContainerJob {
     }
 }
 
-impl MknodDeviceInContainerJob {
-    async fn inject_in_container(self) {
-        let mknod_device_action = Action::MknodDevice {
-            path: self.dev_path.clone(),
-            major: self.major,
-            minor: self.minor,
-        };
+impl MknodDeviceJob {
+    async fn mknod_device(self) {
+        match global_config::get_placement() {
+            Placement::InContainer => {
+                let mknod_device_action = Action::MknodDevice {
+                    path: format!("/dev/input/{}", &self.devname),
+                    major: self.major,
+                    minor: self.minor,
+                };
 
-        let child_pid = process_tools::start_action(mknod_device_action, &self.requesting_process)
-            .expect("subprocess should work");
+                let child_pid =
+                    process_tools::start_action(mknod_device_action, &self.requesting_process)
+                        .expect("subprocess should work");
 
-        let _exit_info = await_process(Pid::Pid(child_pid)).await.unwrap();
+                let _exit_info = await_process(Pid::Pid(child_pid)).await.unwrap();
+            }
+            Placement::OnHost => {
+                let path = format!(
+                    "/run/vuinputd/{}/dev-input/{}",
+                    global_config::get_devname(),
+                    self.devname
+                );
+                input_device::ensure_input_device(path.clone(), self.major, self.minor)
+                    .expect(&format!("VUI-DEV-001: could not create {}", &path));
+                //TODO: somewhat costly
+            }
+            Placement::None => {}
+        }
+
         self.set_state(&State::Finished);
     }
 }
