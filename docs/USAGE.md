@@ -16,6 +16,25 @@ This guide shows how to:
 2. Connect it to the host’s virtual `/dev/uinput`
 3. Verify that device creation and input forwarding work correctly
 
+### Runtime Artifact Placement
+
+`vuinputd` supports different **placement modes** that control where runtime artifacts
+(device nodes *and* associated udev data) are created.
+
+This is configured via the `--placement` command-line option and affects:
+
+* the virtual input device nodes
+* the corresponding `/run/udev` runtime data used by libudev-based applications
+
+### Device Policies
+
+`vuinputd` can enforce **device policies** that control which input capabilities
+and events are exposed to applications.
+
+Policies are applied at device creation time and operate independently of
+container runtime or placement mode.
+
+
 ---
 
 ## 2. Prerequisites
@@ -90,7 +109,140 @@ The `vuinputd` daemon on the host should provide some logs. The following sectio
 
 ---
 
-## 4. Runtime-Specific Setup
+## 4. Special command line settings
+
+### Placement Modes
+
+`vuinputd` can be configured to place runtime artifacts in different locations depending
+on your container setup and isolation model.
+
+#### `--placement in-container` (default)
+
+* Device nodes and udev runtime data are created **inside the container**
+* Requires writable `/dev` and `/run` inside the container
+* No bind-mounts required
+* Best suited for tightly integrated or ephemeral containers
+
+#### `--placement on-host`
+
+* Device nodes and udev runtime data are created **on the host** under:
+  * `/run/vuinputd/{devname}/dev`
+  * `/run/vuinputd/{devname}/udev/data`
+* The user is expected to **bind-mount these directories** into the container
+* Suitable for:
+  * read-only containers
+  * advanced sandboxing scenarios
+
+#### `--placement none`
+
+* No device nodes or udev runtime data are created
+* Useful when:
+  * devices are managed externally
+  * running in dry-run or control-only mode
+  * debugging or testing non-input-related functionality
+
+### Device Policies
+
+Device policies define which input capabilities are allowed and which events
+are filtered out for devices created by `vuinputd`.
+
+They are configured using the `--device-policy` command-line option.
+
+#### Available Policies
+
+`--device-policy none`
+* Allows **all device capabilities**
+* No filtering is applied
+* Useful for debugging or trusted environments
+
+`--device-policy mute-sys-rq` (default)
+
+* Blocks **SysRq** key handling
+* Allows all other input events
+* Prevents accidental or malicious kernel-level hotkeys
+* Please read the section 'Handling Phantom Input Events Caused by VTs'
+
+`--device-policy sanitized`
+
+* Allows keyboards and mice
+* Filters out dangerous key combinations, including:
+  * SysRq
+  * Virtual terminal switching (e.g. `Ctrl+Alt+Fn`)
+* Recommended for most containerized desktop or streaming workloads
+* Caution: This is **experimental**; in case there are combos that should be filtered as well, please post an issue
+
+`--device-policy strict-gamepad`
+
+* Only allows **gamepad-like devices**
+* Blocks keyboards and mice entirely
+* Intended for:
+  * gaming-focused containers
+  * sandboxed input forwarding
+  * untrusted workloads
+
+### Multiple Independent `vuinputd` Instances
+
+`vuinputd` supports running **multiple independent daemon instances**, each managing its **own virtual uinput device**.
+This is achieved by explicitly configuring the device name and (optionally) the major/minor numbers.
+
+This feature is primarily intended for:
+
+* strong fault isolation between containers
+* per-container `vuinputd` instances (especially with `--placement on-host`)
+* development and testing,
+* integration testing with multiple concurrent input stacks
+
+#### Device Identification Options
+
+The following command-line options control the identity of the virtual device created by `vuinputd`:
+
+* `--devname <name>`
+  Name of the device node **without** the `/dev/` prefix
+  (e.g. `vuinput0` → `/dev/vuinput0`)
+
+* `--major <number>`
+  Explicit major device number. Using 0 for both major and minor means auto assign.
+
+* `--minor <number>`
+  Explicit minor device number. Using 0 for both major and minor means auto assign.
+
+If not specified, `vuinputd` uses the default device identity `vuinput`.
+
+#### Why This Matters
+
+By default, all containers share the same virtual uinput endpoint.
+While this is sufficient for many setups, it couples failure domains:
+
+* a bug or crash in one workload may affect others
+* reproducing issues becomes harder when state is shared
+
+Using explicit device identities ensures failures and misbehaving clients are contained per instance.
+
+#### Example: One `vuinputd` Instance per Container (Host Placement)
+
+```bash
+vuinputd --placement on-host --devname vuinput-container-a
+```
+
+The container would then bind-mount:
+
+```text
+/run/vuinputd/vuinput/dev/vuinput-container-a  →  /dev/uinput
+```
+
+A second container can run its own instance with a different device:
+
+```bash
+vuinputd \
+vuinputd --placement on-host --devname vuinput-container-b
+```
+
+No state, devices, or udev data are shared between the two instances.
+
+
+---
+
+## 5. Runtime-Specific Setup
 
 ### 🐳 Docker
 
@@ -153,7 +305,7 @@ Then restart the container.
 
 ---
 
-## 5. Inside the Container
+## 6. Inside the Container
 
 Once inside the container shell:
 
@@ -165,13 +317,17 @@ apt-get update
 apt-get install libinput-tools udev evtest tmux
 
 # Prepare udev stubs
+# Note:
+# The following steps are only required when using `--placement in-container`.
+# When using `--placement on-host`, the udev runtime data is created on the host
+# and must be bind-mounted into the container instead.
 mkdir -p /run/udev/data/
 touch /run/udev/control
 ```
 
 ---
 
-## 6. Verifying Operation
+## 7. Verifying Operation
 
 To test everything, use multiple `tmux` windows for parallel monitoring.
 
@@ -225,7 +381,7 @@ Sample output from `journalctl` showing vuinputd output:
 
 ---
 
-## 7. Handling Phantom Input Events Caused by VTs
+## 8. Handling Phantom Input Events Caused by VTs
 
 On Linux systems without an active graphical session (X11 or Wayland), **virtual terminals (VTs)** remain in text mode (`KD_TEXT`) and continue to process keyboard input via the kernel VT keyboard handler.
 This can lead to *phantom input events*, where injected or forwarded input (e.g. via `vuinputd`) unintentionally reaches:
@@ -329,7 +485,7 @@ Choose the approach that best fits your system constraints and deployment model.
 
 ---
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 | Symptom                     | Possible Cause                       | Fix                                               |
 | --------------------------- | ------------------------------------ | ------------------------------------------------- |
@@ -350,7 +506,7 @@ Dez 14 21:33:17 wohnzimmer vuinputd[2172719]: called `Result::unwrap()` on an `E
 Ensure /dev and /run are writable in the container. If in doubt, use tmpfs.
 ---
 
-## 9. Notes and Advanced Topics
+## 10. Notes and Advanced Topics
 
 * You can safely run **multiple containers**.
 * Devices are automatically cleaned up when the container stops.
@@ -362,7 +518,7 @@ Ensure /dev and /run are writable in the container. If in doubt, use tmpfs.
 
 ---
 
-## 10. References
+## 11. References
 
 * [mkosi manual](https://github.com/systemd/mkosi/blob/main/mkosi/resources/man/mkosi.1.md)
 * [Docker device rules documentation](https://docs.docker.com/engine/reference/run/#device-cgroup-rule)
