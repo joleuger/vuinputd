@@ -2,7 +2,7 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
-use std::{process::Command, time::Duration};
+use std::time::Duration;
 use vuinputd_tests::podman;
 use vuinputd_tests::run_vuinputd;
 
@@ -66,9 +66,9 @@ fn test_podman_ipc() {
 ))]
 #[test]
 fn test_keyboard_in_container_with_vuinput() {
-    run_vuinputd::ensure_vuinputd_running();
+    let _guard=run_vuinputd::ensure_vuinputd_running(&[]);
 
-    let (builder, ipc) = podman::PodmanBuilder::new()
+    let (builder, _ipc) = podman::PodmanBuilder::new()
         .run_cmd()
         .rm()
         .with_ipc()

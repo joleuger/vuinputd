@@ -83,7 +83,7 @@ impl EmitUdevEventJob {
 
 impl Job for EmitUdevEventJob {
     fn desc(&self) -> &str {
-        "emit udev event into container"
+        "emit udev event"
     }
 
     fn execute_after_cancellation(&self) -> bool {

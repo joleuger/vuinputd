@@ -127,8 +127,8 @@ fn test_keyboard_in_container_with_uinput() {
     feature = "requires-bwrap"
 ))]
 #[test]
-fn test_keyboard_in_container_with_vuinput() {
-    run_vuinputd::ensure_vuinputd_running();
+fn test_keyboard_in_container_with_vuinput_placement_in_container() {
+    let _guard: run_vuinputd::VuinputdGuard=run_vuinputd::ensure_vuinputd_running(&[]);
 
     let test_keyboard = env!("CARGO_BIN_EXE_test-keyboard");
 
@@ -140,6 +140,43 @@ fn test_keyboard_in_container_with_vuinput() {
         .dev()
         // run needs to be writable for the udev devices
         .tmpfs("/run")
+        .dev_bind("/dev/vuinput-test", "/dev/uinput")
+        .die_with_parent()
+        .with_ipc()
+        .expect("failed to create IPC");
+
+    let out = builder
+        .command(test_keyboard, &["--ipc"])
+        .run()
+        .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
+
+    println!("Output");
+    println!("stdout: {}", str::from_utf8(&out.stdout).unwrap());
+    println!("stderr: {}", str::from_utf8(&out.stderr).unwrap());
+
+    assert!(out.status.success());
+}
+
+#[cfg(all(
+    feature = "requires-privileges",
+    feature = "requires-uinput",
+    feature = "requires-bwrap"
+))]
+#[test]
+fn test_keyboard_in_container_with_vuinput_placement_on_host() {
+    let _guard=run_vuinputd::ensure_vuinputd_running(&["--placement","on-host"]);
+
+    let test_keyboard = env!("CARGO_BIN_EXE_test-keyboard");
+
+    let (builder, _ipc) = bwrap::BwrapBuilder::new()
+        .unshare_net()
+        .ro_bind("/", "/")
+        .tmpfs("/tmp")
+        // dev needs to be writable for the new devices
+        .dev()
+        // run needs to be writable for the udev devices
+        .tmpfs("/run")
+        .bind("/run/vuinputd/vuinput-test/udev", "/run/udev")
         .dev_bind("/dev/vuinput-test", "/dev/uinput")
         .die_with_parent()
         .with_ipc()

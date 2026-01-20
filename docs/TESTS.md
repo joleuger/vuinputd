@@ -2,6 +2,15 @@
 
 ## Integration tests
 
+Ensure, you have a `/run/vuinputd/vuinput-test`-folder that allows the usage of character devices: 
+```
+mkdir -p /run/vuinputd/vuinput-test
+mount -t tmpfs -o mode=755,size=1M tmpfs /run/vuinputd/vuinput-test
+mkdir -p /run/vuinputd/vuinput-test/dev
+mkdir -p /run/vuinputd/vuinput-test/dev-input
+mkdir -p /run/vuinputd/vuinput-test/udev
+```
+
 ### With bubblewrap
 
 Install bubblewrap:

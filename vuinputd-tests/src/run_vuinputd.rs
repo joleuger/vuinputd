@@ -5,7 +5,7 @@
 use std::{
     os::unix::process::CommandExt,
     process::{Child, Command},
-    sync::OnceLock,
+    sync::Mutex,
     thread,
     time::Duration,
 };
@@ -14,33 +14,37 @@ use nix::sys::signal::{self, Signal};
 use nix::unistd::Pid;
 
 /// Global singleton
-static VUINPUTD: OnceLock<VuinputdGuard> = OnceLock::new();
+static VUINPUTD_LOCK: Mutex<()> = Mutex::new(());
 
-pub fn ensure_vuinputd_running() {
-    VUINPUTD.get_or_init(|| VuinputdGuard::start());
+pub fn ensure_vuinputd_running(args: &[&str]) -> VuinputdGuard {
+    VuinputdGuard::start(args)
 }
 
-struct VuinputdGuard {
+pub struct VuinputdGuard {
     child: Child,
 }
 
 impl VuinputdGuard {
-    fn start() -> Self {
+    fn start(args: &[&str]) -> Self {
+        println!("Acquiring lock to ensure only one vuinputd test instance is running");
+        let _mutex = VUINPUTD_LOCK.lock().unwrap();
         println!("Executing vuinputd located via cargo run");
+        let mut concat_args = vec![
+            "run",
+            "-p",
+            "vuinputd",
+            "--",
+            "--major",
+            "120",
+            "--minor",
+            "414796",
+            "--devname",
+            "vuinput-test",
+        ];
+        concat_args.extend(args);
         let child = unsafe {
             Command::new("cargo")
-                .args([
-                    "run",
-                    "-p",
-                    "vuinputd",
-                    "--",
-                    "--major",
-                    "120",
-                    "--minor",
-                    "414796",
-                    "--devname",
-                    "vuinputd-test",
-                ])
+                .args(concat_args)
                 .pre_exec(|| {
                     // Last resort, if the parent just is killed.
                     libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL);

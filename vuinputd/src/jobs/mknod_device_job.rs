@@ -77,7 +77,7 @@ impl MknodDeviceJob {
 
 impl Job for MknodDeviceJob {
     fn desc(&self) -> &str {
-        "mknod input device in container"
+        "mknod input device"
     }
 
     fn execute_after_cancellation(&self) -> bool {

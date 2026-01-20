@@ -79,7 +79,7 @@ impl RemoveDeviceJob {
 
 impl Job for RemoveDeviceJob {
     fn desc(&self) -> &str {
-        "Remove input device from container"
+        "Remove input device"
     }
 
     fn execute_after_cancellation(&self) -> bool {

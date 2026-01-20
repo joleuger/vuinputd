@@ -58,8 +58,11 @@ impl BwrapBuilder {
         // So, we mount a temporary directory that does not have this restrictions.
         self.args.extend([
             "--dev-bind".into(),
-            "/dev/tmp/vuinputd-test".into(),
+            "/run/vuinputd/vuinput-test/dev".into(),
             "/dev".into(),
+            "--dev-bind".into(),
+            "/run/vuinputd/vuinput-test/dev-input".into(),
+            "/dev/input".into(),
         ]);
         self
     }
