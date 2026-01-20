@@ -33,6 +33,7 @@ use crate::cuse_device::state::{initialize_dedup_last_error, initialize_vuinput_
 use crate::cuse_device::vuinput_make_cuse_ops;
 use crate::cuse_device::vuinput_open::VUINPUT_COUNTER;
 use crate::global_config::{DevicePolicy, Placement};
+use crate::input_realizer::host_fs;
 use crate::jobs::monitor_udev_job::MonitorBackgroundLoop;
 
 pub mod process_tools;
@@ -219,8 +220,9 @@ fn main() -> std::io::Result<()> {
         None => "vuinput",
         Some(devname) => devname,
     };
-    if args.placement==Placement::OnHost {
-        todo!("ensure structure and writablity of dev-input")
+    if args.placement == Placement::OnHost {
+        let path_prefix = format!("/run/vuinputd/{}", global_config::get_vudevname());
+        let _ = host_fs::ensure_host_fs_structure(&path_prefix);
     }
 
     let vuinput_devicename = CString::new(format!("DEVNAME={}", vuinput_devicename)).unwrap();

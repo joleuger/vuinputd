@@ -14,7 +14,7 @@ use async_io::Timer;
 use log::debug;
 
 use crate::{
-    actions::{self, action::Action},
+    actions::action::Action,
     global_config::{self, get_placement, Placement},
     input_realizer::runtime_data,
     job_engine::job::{Job, JobTarget},
@@ -161,7 +161,7 @@ impl EmitUdevEventJob {
                 let _exit_info = await_process(Pid::Pid(child_pid)).await.unwrap();
             }
             Placement::OnHost => {
-                let path_prefix = format!("/run/vuinputd/{}", global_config::get_devname());
+                let path_prefix = format!("/run/vuinputd/{}", global_config::get_vudevname());
                 runtime_data::write_udev_data(
                     &path_prefix,
                     &runtime_data,

@@ -15,6 +15,7 @@ pub struct VuInputDevice {
     pub major: u64,
     pub minor: u64,
     pub syspath: String,
+    pub devname: String,
     pub devnode: String,
 }
 

@@ -9,12 +9,12 @@ use std::path::Path;
 use log::{info, warn};
 
 /// Ensure required udev directories and files exist
-pub fn ensure_udev_structure(path_prefix: &str, warn_if_nonexistent: bool) -> io::Result<()> {
+pub fn ensure_udev_structure() -> io::Result<()> {
     // Note that this structure _must_ exist, before a service using libinput is run. The time of device creation might be too late.
 
-    let data_dir = format!("{}/udev/data", path_prefix);
+    let data_dir = format!("/run/udev/data");
     let data_dir = Path::new(&data_dir);
-    let control_file = format!("{}/udev/control", path_prefix);
+    let control_file = format!("/run/udev/control");
     let control_file = Path::new(&control_file);
 
     // Create directory like `mkdir -p`

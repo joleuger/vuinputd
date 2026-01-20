@@ -26,10 +26,12 @@ fn handle_action(action: Action) -> anyhow::Result<()> {
             major,
             minor,
         } => {
-            runtime_data::ensure_udev_structure("/run",true)?;
+            runtime_data::ensure_udev_structure()?;
             match runtime_data {
-                Some(data) => runtime_data::write_udev_data("/run",&data, major.into(), minor.into())?,
-                None => runtime_data::delete_udev_data("/run",major.into(), minor.into())?,
+                Some(data) => {
+                    runtime_data::write_udev_data("/run", &data, major.into(), minor.into())?
+                }
+                None => runtime_data::delete_udev_data("/run", major.into(), minor.into())?,
             }
             Ok(())
         }

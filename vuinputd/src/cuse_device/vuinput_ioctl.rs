@@ -172,6 +172,7 @@ pub unsafe extern "C" fn vuinput_ioctl(
                 major: major,
                 minor: minor,
                 syspath: sysname.clone(),
+                devname: devname.clone(),
                 devnode: devnode.clone(),
             });
 
@@ -231,7 +232,7 @@ pub unsafe extern "C" fn vuinput_ioctl(
                 let input_device = input_device.unwrap();
                 let remove_job = RemoveDeviceJob::new(
                     vuinput_state.requesting_process.clone(),
-                    input_device.devnode.clone(),
+                    input_device.devname.clone(),
                     input_device.syspath.clone(),
                     input_device.major,
                     input_device.minor,

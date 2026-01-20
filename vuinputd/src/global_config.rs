@@ -2,14 +2,14 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
-use clap::{Parser, ValueEnum};
+use clap::ValueEnum;
 use std::sync::OnceLock;
 
 #[derive(Debug)]
 pub struct GlobalConfig {
     pub policy: DevicePolicy,
     pub placement: Placement,
-    pub devname: String,
+    pub vudevname: String,
 }
 
 // The actual static variable. It starts empty and is set once in main().
@@ -50,7 +50,7 @@ pub fn initialize_global_config(
         .set(GlobalConfig {
             policy: device_policy.clone(),
             placement: placement.clone(),
-            devname: devname.clone().unwrap_or("vuinput".to_string()),
+            vudevname: devname.clone().unwrap_or("vuinput".to_string()),
         })
         .is_err()
     {
@@ -67,6 +67,6 @@ pub fn get_placement<'a>() -> &'a Placement {
     &CONFIG.get().unwrap().placement
 }
 
-pub fn get_devname<'a>() -> &'a String {
-    &CONFIG.get().unwrap().devname
+pub fn get_vudevname<'a>() -> &'a String {
+    &CONFIG.get().unwrap().vudevname
 }

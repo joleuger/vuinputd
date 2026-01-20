@@ -30,7 +30,7 @@ pub enum State {
 pub struct RemoveDeviceJob {
     requesting_process: RequestingProcess,
     target: JobTarget,
-    dev_path: String,
+    dev_name: String,
     sys_path: String,
     major: u64,
     minor: u64,
@@ -40,7 +40,7 @@ pub struct RemoveDeviceJob {
 impl RemoveDeviceJob {
     pub fn new(
         requesting_process: RequestingProcess,
-        dev_path: String,
+        dev_name: String,
         sys_path: String,
         major: u64,
         minor: u64,
@@ -48,7 +48,7 @@ impl RemoveDeviceJob {
         Self {
             requesting_process: requesting_process.clone(),
             target: JobTarget::Container(requesting_process),
-            dev_path: dev_path,
+            dev_name: dev_name,
             sys_path: sys_path,
             major: major,
             minor: minor,
@@ -122,14 +122,14 @@ impl RemoveDeviceJob {
         let netlink_data = netlink_event.add_data;
 
         let mut netlink_data = netlink_data.unwrap().clone();
-        let dev_path = self.dev_path.clone();
 
         let _ = netlink_data.insert("ACTION".to_string(), "remove".to_string());
 
         match global_config::get_placement() {
             Placement::InContainer => {
+                let dev_path = format!("/dev/input/{}", &self.dev_name);
                 let remove_device_action = Action::RemoveDevice {
-                    path: dev_path.clone(),
+                    path: dev_path,
                     major: self.major,
                     minor: self.minor,
                 };
@@ -154,9 +154,17 @@ impl RemoveDeviceJob {
                 let _exit_info = await_process(Pid::Pid(child_pid_2)).await;
             }
             Placement::OnHost => {
-                todo!();
-                //input_device::remove_input_device(path, major.into(), minor.into())?;
-                //runtime_data::delete_udev_data("/run",major.into(), minor.into())?;
+                let path_prefix = format!("/run/vuinputd/{}", global_config::get_vudevname());
+                let devnode = format!("{}/dev-input/{}", path_prefix, self.dev_name);
+                input_device::remove_input_device(devnode.clone(), self.major, self.minor).expect(
+                    &format!("VUI-DEV-003: could not remove device node {}", &devnode),
+                );
+                runtime_data::delete_udev_data(&path_prefix, self.major, self.minor).expect(
+                    &format!(
+                        "VUI-UDEV-003: could not remove udev data from {}",
+                        &path_prefix
+                    ),
+                );
             }
             Placement::None => {}
         }

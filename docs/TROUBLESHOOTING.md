@@ -24,6 +24,8 @@ Error messages may change over time; error codes do not.
 |------|------|--------|
 | VUI-UDEV-001 | udev | udev control socket not reachable |
 | VUI-UDEV-002 | udev | could not write into /run/vuinputd/... |
+| VUI-UDEV-003 | udev | could not remove udev data from ... |
+| VUI-DEV-001 | ddev | could not remove device node ... |
 
 ---
 

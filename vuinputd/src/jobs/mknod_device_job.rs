@@ -16,8 +16,6 @@ use crate::{
     process_tools::{self, await_process, Pid, RequestingProcess},
 };
 
-use crate::input_realizer::runtime_data::write_udev_data;
-
 #[derive(Clone, Debug, Copy, PartialOrd, PartialEq)]
 pub enum State {
     Initialized,
@@ -112,11 +110,8 @@ impl MknodDeviceJob {
                 let _exit_info = await_process(Pid::Pid(child_pid)).await.unwrap();
             }
             Placement::OnHost => {
-                let path = format!(
-                    "/run/vuinputd/{}/dev-input/{}",
-                    global_config::get_devname(),
-                    self.devname
-                );
+                let path_prefix = format!("/run/vuinputd/{}", global_config::get_vudevname());
+                let path = format!("{}/dev-input/{}", path_prefix, self.devname);
                 input_device::ensure_input_device(path.clone(), self.major, self.minor)
                     .expect(&format!("VUI-DEV-001: could not create {}", &path));
                 //TODO: somewhat costly
