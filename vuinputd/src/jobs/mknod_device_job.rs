@@ -9,13 +9,14 @@ use std::{
 };
 
 use crate::{
-    actions::{action::Action, input_device},
+    actions::action::Action,
     global_config::{self, Placement},
+    input_realizer::input_device,
     job_engine::job::{Job, JobTarget},
     process_tools::{self, await_process, Pid, RequestingProcess},
 };
 
-use crate::actions::runtime_data::write_udev_data;
+use crate::input_realizer::runtime_data::write_udev_data;
 
 #[derive(Clone, Debug, Copy, PartialOrd, PartialEq)]
 pub enum State {

@@ -23,6 +23,7 @@ Error messages may change over time; error codes do not.
 | Code | Area | Summary |
 |------|------|--------|
 | VUI-UDEV-001 | udev | udev control socket not reachable |
+| VUI-UDEV-002 | udev | could not write into /run/vuinputd/... |
 
 ---
 
@@ -60,3 +61,5 @@ When reporting an issue, please include:
 * Full command-line invocation
 * Execution environment (host, container, systemd)
 * Relevant debug logs (see [DEBUG.md](DEBUG.md))
+
+### VUI-UDEV-002 - could not write into /run/vuinputd/...

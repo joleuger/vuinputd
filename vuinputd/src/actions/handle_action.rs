@@ -3,9 +3,9 @@
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
 use super::action::Action;
-use super::input_device;
-use super::netlink_message;
-use super::runtime_data;
+use crate::input_realizer::input_device;
+use crate::input_realizer::netlink_message;
+use crate::input_realizer::runtime_data;
 
 pub fn handle_cli_action(json: String) -> i32 {
     let action: Action = serde_json::from_str(&json).expect("invalid action JSON");

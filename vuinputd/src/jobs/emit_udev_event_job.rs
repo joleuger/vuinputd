@@ -14,12 +14,9 @@ use async_io::Timer;
 use log::debug;
 
 use crate::{
-    actions::{
-        self,
-        action::Action,
-        runtime_data::{self, read_udev_data},
-    },
+    actions::{self, action::Action},
     global_config::{self, get_placement, Placement},
+    input_realizer::runtime_data,
     job_engine::job::{Job, JobTarget},
     jobs::monitor_udev_job::EVENT_STORE,
     process_tools::{self, await_process, Pid, RequestingProcess},
@@ -128,7 +125,7 @@ impl EmitUdevEventJob {
                 };
             }
             if runtime_data.is_none() {
-                runtime_data = read_udev_data(self.major, self.minor).ok();
+                runtime_data = runtime_data::read_udev_data(self.major, self.minor).ok();
             }
 
             number_of_attempt += 1;

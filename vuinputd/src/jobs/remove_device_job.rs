@@ -13,6 +13,7 @@ use log::debug;
 use crate::{
     actions::action::Action,
     global_config::{self, Placement},
+    input_realizer::{input_device, runtime_data},
     job_engine::job::{Job, JobTarget},
     jobs::monitor_udev_job::EVENT_STORE,
     process_tools::{self, await_process, Pid, RequestingProcess},
@@ -154,6 +155,8 @@ impl RemoveDeviceJob {
             }
             Placement::OnHost => {
                 todo!();
+                //input_device::remove_input_device(path, major.into(), minor.into())?;
+                //runtime_data::delete_udev_data("/run",major.into(), minor.into())?;
             }
             Placement::None => {}
         }

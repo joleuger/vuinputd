@@ -42,6 +42,7 @@ use crate::job_engine::{job::*, JOB_DISPATCHER};
 use crate::process_tools::*;
 
 pub mod actions;
+pub mod input_realizer;
 
 pub mod global_config;
 pub mod jobs;
@@ -218,6 +219,10 @@ fn main() -> std::io::Result<()> {
         None => "vuinput",
         Some(devname) => devname,
     };
+    if args.placement==Placement::OnHost {
+        todo!("ensure structure and writablity of dev-input")
+    }
+
     let vuinput_devicename = CString::new(format!("DEVNAME={}", vuinput_devicename)).unwrap();
 
     let mut dev_info_argv: Vec<*const c_char> = vec![

@@ -30,7 +30,7 @@ pub enum DevicePolicy {
     StrictGamepad,
 }
 /// Where to create runtime artifacts (device nodes + udev data)
-#[derive(Debug, Clone, ValueEnum, Default)]
+#[derive(Debug, Clone, ValueEnum, Default, PartialEq, Eq)]
 pub enum Placement {
     #[default]
     /// Create inside the container
