@@ -1,1 +1,8 @@
-session required pam_systemd.so class=greeter
+# /etc/pam.d/fallbackdm
+# https://man.archlinux.org/man/pam_systemd.8.en
+# alternative class=lock-screen
+# debug=yes
+# https://github.com/GNOME/gdm/blob/main/daemon/gdm-local-display-factory.c
+auth     required  pam_permit.so
+account  required  pam_permit.so
+session  required  pam_systemd.so class=greeter type=wayland

@@ -1,103 +1,144 @@
-# Background
+# DESIGN.md
+## 1. Design Philosophy: Standardized Infrastructure
 
-Motivation
-When a display server (like X11 or Wayland) takes control of a session, it needs exclusive access to the virtual terminal (VT). Without this, the kernel could still process keyboard input directly at the VT level, causing interference with the display server's input handling. This creates a conflict where both the VT subsystem and display server try to handle the same keystrokes, leading to unpredictable behavior.
+The core design principle of `fallbackdm` is to **utilize established systemd interfaces** to solve the "Empty Seat" problem.
 
-Details
-The D-Bus TakeControl method initiates this process by validating the caller's permissions and delegating to session_set_controller() [1a]. This function sets up bus tracking to monitor the controller's lifecycle and critically calls session_prepare_vt() [1b] to configure the VT hardware.
+In a modern Linux ecosystem, hardware resource arbitration has moved away from direct device manipulation by individual applications. `systemd-logind` now acts as the central arbiter for seats, sessions, and terminal states.
 
-The VT preparation performs three essential operations: it changes ownership of the VT device file to the session user, then issues two key ioctl calls. The first, ioctl(vt, KDSKBMODE, K_OFF) [1c], disables keyboard input at the VT level - this is the "muting" that prevents the kernel from processing keystrokes directly. The second, ioctl(vt, KDSETMODE, KD_GRAPHICS) [1d], switches the VT to graphics mode. Finally, it sets VT process mode [1e] to handle VT switches through signals rather than the default kernel mechanism.
+`fallbackdm` is designed to be a "minimalist citizen" of this architecture. Instead of implementing a full graphical stack to "own" the hardware, it leverages the fact that the kernel and `logind` already provide a mechanism to mute VTs and protect input streams. By registering as a formal session controller, `fallbackdm` ensures the system remains in a "graphical-ready" state—silencing the legacy text console—without the overhead of an actual display server.
 
-This sequence ensures the display server has uninterrupted control over input and output, preventing the kernel from interfering with session management.
+## 2. The Mechanism: The `TakeControl` Handshake
 
-Detailed code path:
+The critical functionality of `fallbackdm`—silencing the kernel terminal to prevent input leakage—is achieved through a single, standardized D-Bus handshake: `TakeControl`.
 
-1
-D-Bus TakeControl to VT Muting
-Traces the complete flow from D-Bus TakeControl call to VT keyboard muting via ioctl. See guide
+This mechanism replaces manual `ioctl` calls. By invoking the `TakeControl` method on the `org.freedesktop.login1.Session` interface, `fallbackdm` triggers a privileged workflow inside `logind` that safely transitions the machine state.
 
-method_take_control() entry point
-Permission validation
+### 2.1 The Internal Workflow
 
-1a
-TakeControl calls session_set_controller
-logind-session-dbus.c:404
-r = session_set_controller(s, sd_bus_message_get_sender(message), force, true);
-Bus tracking setup
+When `fallbackdm` calls `TakeControl`, it triggers the following verified code path within `systemd-logind` (as referenced in `logind-session.c`):
 
-1b
-session_set_controller prepares VT
-logind-session.c:1506
-if (prepare) { r = session_prepare_vt(s);
-session_open_vt()
-fchown() for ownership
-VT configuration sequence
-
-1c
-VT keyboard is disabled
-logind-session.c:1339
-r = ioctl(vt, KDSKBMODE, K_OFF);
-
-1d
-VT set to graphics mode
-logind-session.c:1347
-r = ioctl(vt, KDSETMODE, KD_GRAPHICS);
-
-1e
-VT process mode configured
-logind-session.c:1358
+1. **Permission Check:** `logind` verifies the caller owns the session.
+2. **Controller Assignment:** `session_set_controller()` marks `fallbackdm` as the active display server.
+3. **VT Preparation:** `logind` executes `session_prepare_vt()`, which performs the privileged operations:
+* **Mute Input:** Calls `ioctl(vt, KDSKBMODE, K_OFF)`. This effectively disconnects the kernel console from the keyboard, preventing `getty` or the kernel from interpreting keystrokes.
+* **Graphics Mode:** Calls `ioctl(vt, KDSETMODE, KD_GRAPHICS)`. This disables the blinking cursor and text rendering.
+* **Signal Handling:** Configures the VT to send signals (like `SIGUSR1`) for switching, rather than automatically switching context.
 
 
-## Example Mutter from Gnome
 
-Motivation
-When Mutter runs as a Wayland compositor on a Linux system, it needs to control the session to manage things like VT switching and device access. Without registering as the session controller, Mutter couldn't properly handle these system-level operations, leading to broken display switching and input device management.
+**Result:** `fallbackdm` achieves a "muted" state without ever needing to open a device file or possess `CAP_SYS_TTY_CONFIG` capabilities directly.
 
-Details
-The registration happens during backend initialization when the native backend creates a launcher instance [1a]. This launcher obtains a D-Bus proxy to the systemd-logind session and calls the TakeControl method to register as the session controller [1b].
+## 3. Industry Precedent: The Standard Stack
 
-The process is:
+`fallbackdm` does not invent a new protocol; it isolates the infrastructure logic used by modern Linux desktops. To understand why `fallbackdm` works, we must look at how the **Wayland Native** stack (GDM and Mutter) handles seat ownership.
 
-Native backend starts up and creates a MetaLauncher
-Launcher gets the session proxy from systemd-logind
-Calls TakeControl D-Bus method with force=FALSE
-Stores the result to track if control was acquired
-If registration fails, Mutter continues running but with limited capabilities - it won't be able to switch VTs or manage device permissions. The launcher exposes the control status via meta_launcher_is_session_controller() so other components can check if Mutter successfully became the session controller.
+### 3.1 Foundational Concepts: Seats, Sessions, and Leaders
+
+On a modern system, hardware access is governed by several distinct layers:
+
+* **The Seat (e.g., `seat0`):** A collection of hardware (GPU, Keyboard, Mouse).
+* **The Session:** An instance of a user (or service) interacting with a seat.
+* **The Session Leader:** The primary process responsible for the session. In a graphical world, this is the **Compositor** (Mutter).
+* **The Display Manager (GDM):** A supervisor that manages the lifecycle of sessions.
+
+In the **Wayland Native** workflow, the compositor (Mutter) serves as the "Display Server." It talks directly to the kernel for graphics (DRM/KMS) and input (libinput). However, it does not "steal" these resources; it asks `systemd-logind` for permission.
+
+### 3.2 Technical Execution: PAM and the Handshake
+
+The transition from a text-based boot to a graphical environment follows a strict sequence. `fallbackdm` mimics the first half of this cycle:
+
+#### 1. Simplified Session Registration (The PAM Layer)
+
+Before a process can "Take Control" of a seat, a session must exist. GDM initiates this via a specialized, minimalist PAM stack (e.g., `gdm-launch-environment.pam`).
+
+Following the GDM precedent, `fallbackdm` uses a simplified PAM stack because a greeter/placeholder session **has no password and cannot be locked.** This removes the overhead of full `system-auth` account and password modules, focusing strictly on:
+
+* Setting up the environment (`pam_env.so`).
+* Permitting the session entry (`pam_permit.so`).
+* Registering the session with `logind` via `pam_systemd.so` as `class=greeter`.
+
+#### 2. Claiming the Seat (The D-Bus Layer)
+
+Once registered, the Session Leader (Mutter in a standard setup, `fallbackdm` in ours) must claim the seat. The process calls `TakeControl(force=true)` on its own Session object via D-Bus. `logind` validates that the caller is the registered leader and then performs the privileged "silencing" of the VT.
+
+### 3.3 Sequence & Implementation Mapping
+
+```mermaid
+sequenceDiagram
+    participant P as PAM (Simplified Stack)
+    participant F as fallbackdm (Session Leader)
+    participant L as systemd-logind
+    participant K as Kernel (VT Layer)
+
+    Note over P, L: 1. Registration (class=greeter)
+    P->>L: CreateSession (via pam_systemd)
+    L-->>P: Session Path / ID
+    
+    Note over F, L: 2. The Handshake (Wayland Native Style)
+    F->>L: D-Bus: TakeControl(force=true)
+    
+    Note over L: Validate Caller (session_set_controller)
+    
+    Note over L, K: 3. VT Preparation (session_prepare_vt)
+    L->>K: ioctl(vt, KDSKBMODE, K_OFF)
+    L->>K: ioctl(vt, KDSETMODE, KD_GRAPHICS)
+    
+    Note over K: Keyboard Muted / Console Silenced
+    
+    L-->>F: Method Return (Success)
+    Note over F: Hold Seat (Idle)
+
+```
+
+#### Source References for Verification
+
+* **GDM (PAM):** `data/gdm-launch-environment.pam` — Demonstrates the minimalist "don't run full account/password stacks" approach for greeters.
+* **GDM (PAM):** `src/daemon/gdm-session-worker.c` — Shows how the minimalist pam session is started via `gdm_session_worker_initialize_pam`.
+* **systemd-logind:** `src/login/logind-session-dbus.c` — see `method_take_control()`.
+* **systemd-logind:** `src/login/logind-session.c` — see `session_prepare_vt()` (where the `K_OFF` and `KD_GRAPHICS` ioctls live).
+* **Mutter:** `src/backends/native/meta-launcher.c` — see `meta_launcher_new()` where the D-Bus proxy for the session is created and `TakeControl` is called.
+* **GDM:** `daemon/gdm-manager.c` — see `set_up_greeter_session()` which coordinates the PAM transition.
+
+### 3.4 The Parallel
+
+* **Standard DM:** `PAM` → `Mutter` → **`TakeControl`** → *Open DRM/Input Devices*
+* **fallbackdm:** `PAM` → `fallbackdm` → **`TakeControl`** → *Wait/Idle*
+
+By stopping after the `TakeControl` handshake, `fallbackdm` provides the exact same system-level protection as a full desktop environment with zero overhead and a vastly smaller attack surface.
 
 
-## GDM Greeter
+## 4. Alignment with Systemd Guidelines
 
-how does the greeter take over the seat when it starts (not how it communicates with systemd-logind to create a user session once the user enters his credentials.
-Fast
-The greeter takes over the seat through GDM's display management system when it starts. This process involves creating a display for the seat and launching the greeter session on that display.
+The design strictly adheres to the *[Writing Display Managers](https://systemd.io/WRITING_DISPLAY_MANAGERS/)* specification provided by the systemd project.
 
-Seat Takeover Process
-1. Display Creation for Seat
-When a greeter needs to start, ensure_display_for_seat() in daemon/gdm-local-display-factory.c is called to create a display for the specific seat gdm-local-display-factory.c:814-880 . This function:
+| Systemd Requirement | `fallbackdm` Implementation |
+| --- | --- |
+| **"Register via PAM"** | `fallbackdm` uses `pam_systemd.so` with `class=greeter` to register a valid session. |
+| **"Take possession"** | We use the `TakeControl` D-Bus method to explicitly claim the seat. |
+| **"Passive C API"** | We use `sd-login` (or equivalent D-Bus calls) to identify the seat, avoiding manual parsing of `/var/run` or `/proc`. |
+| **"Minimal Porting"** | By offloading VT management to `logind`, we achieve the "Minimal porting" goal described in the docs, removing legacy ConsoleKit/ioctl code. |
 
-Checks if the seat supports graphics via sd_seat_can_graphical() gdm-local-display-factory.c:863-876
-Creates a new GdmDisplay object for the seat
-Sets up the display environment
-2. Greeter Session Startup
-Once the display is created, gdm_display_start_greeter_session() in daemon/gdm-display.c starts the greeter process gdm-display.c:1682-1743 . This function:
+## 5. Security & Stability Implications
 
-Gets the seat ID and display name for the greeter gdm-display.c:1698-1708
-Sets up signal handlers for the launch environment lifecycle gdm-display.c:1709-1728
-Starts the greeter via gdm_launch_environment_start() gdm-display.c:1736
-3. Manager Coordination
-The GdmManager coordinates this process through set_up_greeter_session() which: gdm-manager.c:1432-1449
+### 5.1 Adherence to Least Privilege
 
-Determines the appropriate user for the greeter display
-Creates a user session for the greeter
-Calls gdm_display_start_greeter_session() to start the greeter
-Seat Activation Mechanism
-The greeter gains control of the seat through the display server (X11 or Wayland) that runs as part of the launch environment. When gdm_launch_environment_start() is called, it:
+By using `logind` as a proxy for hardware configuration, `fallbackdm` avoids the need for:
 
-Starts the appropriate display server for the seat
-Launches the greeter program on that display server
-The display server provides the greeter with access to the seat's graphics hardware and input devices
-This gives the greeter exclusive control of the seat's display and input devices until the user authenticates and a user session is started.
+* `CAP_SYS_TTY_CONFIG`: No need to configure TTYs directly.
+* Device Node Access: No need to open `/dev/ttyX` or `/dev/input/eventX`.
+* Root Privileges: `fallbackdm` can run as a dedicated unprivileged system user, as `logind` validates the `TakeControl` request based on session ownership, not UID 0.
 
-Notes
-The seat takeover is essentially the process of creating a display-server instance for the seat and launching the greeter as a client of that display server. The greeter runs as the unprivileged "gdm" user but gets control of the seat through its connection to the display server that manages the seat's hardware resources.
+### 5.2 Graceful Handover
 
+Because `fallbackdm` is a "polite" session controller:
+
+* When a real DM (like GDM) starts, it triggers a new session or requests the seat.
+* `logind` manages the transition, and `fallbackdm` yields or exits based on standard D-Bus signals (`ReleaseSession`).
+* This ensures no "input blips" where the keyboard reverts to text mode during the split-second transition between `fallbackdm` and a real compositor.
+
+
+## 6. Summary
+
+The design of `fallbackdm` is not a workaround; it is a **canonical implementation of a headless systemd session controller**.
+
+By leveraging the `TakeControl` API, we utilize the exact mechanism built for this purpose, supported by the kernel and `systemd` developers, and battle-tested by GNOME and KDE. This ensures that the "Input Leakage" problem is solved at the infrastructure level, where it belongs.
