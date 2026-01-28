@@ -395,7 +395,7 @@ The following approaches can be used to prevent or mitigate this behavior.
 
 ### Solution 1: Use KMSCON (DRM/KMS-based console)
 
-A robust solution is to replace the kernel VT text console with a **DRM/KMS-based console** such as `kmscon`.
+A robust solution is to replace the kernel VT text console with a **DRM/KMS-based console** such as `kmscon`. This is very likely the solution that works natively with Fedora 44+ (see [phoronix.com](https://www.phoronix.com/news/Fedora-44-Considers-KMSCON)).
 
 #### How it helps
 
@@ -451,7 +451,7 @@ This is done via direct VT ioctls (e.g. `KDSETMODE`), ensuring that:
 
 ### Solution 3: fallbackdm (Work in Progress)
 
-`fallbackdm` is an experimental, lightweight **logind-integrated fallback display manager**.
+`fallbackdm` is an experimental, lightweight **logind-integrated fallback display manager**. `fallbackdm` is available at https://github.com/joleuger/fallbackdm.
 
 #### Intended behavior
 

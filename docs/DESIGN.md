@@ -549,7 +549,7 @@ To further mitigate these risks, `vuinputd` could be extended to parse the host'
 
 ### **Decision**
 
-`fallbackdm` is implemented as a **logind-managed fallback graphical session**.
+`fallbackdm` is implemented as a **logind-managed fallback graphical session**. It is available at https://github.com/joleuger/fallbackdm.
 
 It runs only when **no other graphical session is active** on the seat and exists solely to:
 
