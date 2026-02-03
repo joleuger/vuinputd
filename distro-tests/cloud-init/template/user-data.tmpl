@@ -1,0 +1,21 @@
+#cloud-config
+#
+# Shared cloud-init configuration for distro-tests
+# SSH keys are injected dynamically by create-cloud-init-iso.sh
+#
+
+users:
+  - name: testuser
+    groups: users, adm
+    shell: /bin/bash
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    ssh_authorized_keys:
+
+disable_root: true
+ssh_pwauth: false
+
+package_update: false
+package_upgrade: false
+
+runcmd:
+  - echo "cloud-init bootstrap complete" > /var/tmp/cloud-init-ok
