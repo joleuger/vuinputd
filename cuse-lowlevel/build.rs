@@ -23,7 +23,8 @@ fn fuse_binding_filter(builder: bindgen::Builder) -> bindgen::Builder {
         .allowlist_function("(?i)^fuse.*")
         .allowlist_var("(?i)^fuse.*")
         .blocklist_type("fuse_log_func_t")
-        .blocklist_function("fuse_set_log_func");
+        .blocklist_function("fuse_set_log_func")
+        .allowlist_type("^libfuse_version$");
     builder
 }
 
