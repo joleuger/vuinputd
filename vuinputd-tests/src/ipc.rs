@@ -2,6 +2,8 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
+// TODO: Use https://varlink.org/ which also supports bridges over ssh, which is nice
+
 use std::{
     io,
     os::{

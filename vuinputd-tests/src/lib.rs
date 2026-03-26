@@ -2,6 +2,8 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
+pub mod devices;
+pub mod scenarios;
 pub mod bwrap;
 pub mod ipc;
 pub mod podman;
