@@ -3,8 +3,8 @@
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
 use super::Device;
-use std::{ffi::CStr, fs::File};
 use std::io;
+use std::{ffi::CStr, fs::File};
 use uinput_ioctls::*;
 
 /// Key codes. Those are used by udev to recognize a device as a keyboard.
@@ -124,7 +124,6 @@ pub const KEY_DOWN: u16 = 108;
 pub const KEY_PAGEDOWN: u16 = 109;
 pub const KEY_INSERT: u16 = 110;
 pub const KEY_DELETE: u16 = 111;
-
 
 /// Configure a full 101-key standard keyboard
 unsafe fn set_standard_keyboard_keys(fd: i32) -> Result<(), std::io::Error> {
@@ -269,11 +268,10 @@ impl Device for KeyboardDevice {
     }
 
     fn get_event_device(sysname: &str) -> Result<File, io::Error> {
-        super::utils::fetch_device_node(sysname)
-            .and_then(|devnode| File::open(&devnode))
+        super::utils::fetch_device_node(sysname).and_then(|devnode| File::open(&devnode))
     }
 
-    fn setup(device:Option<&str>,name: &str) -> Result<i32, io::Error> {
+    fn setup(device: Option<&str>, name: &str) -> Result<i32, io::Error> {
         let fd = super::utils::open_uinput(device)?;
         unsafe { set_standard_keyboard_keys(fd) }?;
 

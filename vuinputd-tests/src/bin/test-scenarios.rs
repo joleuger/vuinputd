@@ -4,9 +4,11 @@
 
 use clap::{Parser, Subcommand};
 use vuinputd_tests::scenarios::{
-    ScenarioArgs, basic_keyboard::BasicKeyboard, basic_mouse::BasicMouse, basic_ps4_gamepad::BasicPs4Gamepad, basic_xbox_gamepad::BasicXboxGamepad/*
-    reuse_keyboard::ReuseKeyboard, reuse_xbox_gamepad::ReuseXboxGamepad,
-    ScenarioArgs, stress_keyboard::StressKeyboard, stress_xbox_gamepad::StressXboxGamepad, */
+    basic_keyboard::BasicKeyboard, basic_mouse::BasicMouse, basic_ps4_gamepad::BasicPs4Gamepad,
+    basic_xbox_gamepad::BasicXboxGamepad, /*
+                                          reuse_keyboard::ReuseKeyboard, reuse_xbox_gamepad::ReuseXboxGamepad,
+                                          ScenarioArgs, stress_keyboard::StressKeyboard, stress_xbox_gamepad::StressXboxGamepad, */
+    ScenarioArgs,
 };
 
 #[derive(Parser)]
@@ -38,7 +40,6 @@ enum Commands {
 
     /// Basic Xbox gamepad test
     BasicXboxGamepad,
-
     /*
     /// Reuse keyboard test (create, destroy, recreate)
     ReuseKeyboard,

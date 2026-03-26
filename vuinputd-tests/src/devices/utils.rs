@@ -2,6 +2,7 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
+use crate::test_log::{LoggedInputEvent, TestLog};
 use libc::{c_int, close, open, write, O_NONBLOCK, O_WRONLY};
 use libc::{input_event, timespec, uinput_setup, CLOCK_MONOTONIC};
 use std::ffi::{CStr, CString};
@@ -12,14 +13,12 @@ use std::os::fd::AsRawFd;
 use std::os::raw::{c_char, c_void};
 use std::ptr;
 pub use uinput_ioctls::*;
-use crate::test_log::{LoggedInputEvent, TestLog};
 
 // Constants (same numeric values as in linux headers)
 const EV_SYN: u16 = 0x00;
 const EV_KEY: u16 = 0x01;
 const SYN_REPORT: u16 = 0;
 const BUS_USB: u16 = 0x03;
-
 
 pub fn emit(fd: c_int, ev_type: u16, code: u16, val: i32) -> io::Result<()> {
     // libc's input_event struct layout:
@@ -126,8 +125,7 @@ pub fn monotonic_time() -> (i64, i64) {
     (ts.tv_sec, ts.tv_nsec)
 }
 
-
-pub fn open_uinput(device:Option<&str>) -> io::Result<i32> {
+pub fn open_uinput(device: Option<&str>) -> io::Result<i32> {
     let device = match device {
         Some(dev_path) => dev_path,
         _ => "/dev/uinput",

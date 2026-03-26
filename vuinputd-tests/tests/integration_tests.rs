@@ -128,7 +128,7 @@ fn test_keyboard_in_container_with_uinput() {
 ))]
 #[test]
 fn test_keyboard_in_container_with_vuinput_placement_in_container() {
-    let _guard: run_vuinputd::VuinputdGuard=run_vuinputd::ensure_vuinputd_running(&[]);
+    let _guard: run_vuinputd::VuinputdGuard = run_vuinputd::ensure_vuinputd_running(&[]);
 
     let test_keyboard = env!("CARGO_BIN_EXE_test-keyboard");
 
@@ -164,7 +164,7 @@ fn test_keyboard_in_container_with_vuinput_placement_in_container() {
 ))]
 #[test]
 fn test_keyboard_in_container_with_vuinput_placement_on_host() {
-    let _guard=run_vuinputd::ensure_vuinputd_running(&["--placement","on-host"]);
+    let _guard = run_vuinputd::ensure_vuinputd_running(&["--placement", "on-host"]);
 
     let test_keyboard = env!("CARGO_BIN_EXE_test-keyboard");
 

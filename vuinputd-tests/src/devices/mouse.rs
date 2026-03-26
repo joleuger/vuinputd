@@ -2,10 +2,10 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
-use super::{ Device};
-use std::{ffi::CStr, fs::File};
-use std::io;
+use super::Device;
 use libc::c_int;
+use std::io;
+use std::{ffi::CStr, fs::File};
 use uinput_ioctls::*;
 
 // Mouse codes
@@ -32,7 +32,6 @@ unsafe fn setup_mouse(fd: c_int) -> io::Result<()> {
     Ok(())
 }
 
-
 pub struct MouseDevice;
 
 impl Device for MouseDevice {
@@ -41,8 +40,7 @@ impl Device for MouseDevice {
     }
 
     fn get_event_device(sysname: &str) -> Result<File, io::Error> {
-        super::utils::fetch_device_node(sysname)
-            .and_then(|devnode| File::open(&devnode))
+        super::utils::fetch_device_node(sysname).and_then(|devnode| File::open(&devnode))
     }
 
     fn setup(device: Option<&str>, name: &str) -> Result<i32, io::Error> {

@@ -66,11 +66,45 @@ fn test_podman_ipc() {
 ))]
 #[test]
 fn test_keyboard_in_container_with_vuinput() {
-    let _guard=run_vuinputd::ensure_vuinputd_running(&[]);
+    let _guard = run_vuinputd::ensure_vuinputd_running(&[]);
 
     let (builder, _ipc) = podman::PodmanBuilder::new()
         .run_cmd()
         .rm()
+        .with_ipc()
+        .expect("failed to create IPC");
+    let builder = builder
+        //.detach()
+        //.name(&format!("vuinputd-podman-tests"))
+        .device("/dev/vuinput-test:/dev/uinput")
+        .allow_input_devices()
+        .image("localhost/vuinputd-tests:latest")
+        .command(&["/test-keyboard"]);
+
+    let out = builder
+        .run()
+        .unwrap_or_else(|e| panic!("failed to run podman!: {e}"));
+
+    println!("Output");
+    println!("stdout: {}", str::from_utf8(&out.stdout).unwrap());
+    println!("stderr: {}", str::from_utf8(&out.stderr).unwrap());
+
+    assert!(out.status.success());
+}
+
+#[cfg(all(
+    feature = "requires-rootless",
+    feature = "requires-uinput",
+    feature = "requires-podman"
+))]
+#[test]
+fn test_keyboard_in_container_with_vuinput_rootless_with_userns() {
+    let _guard = run_vuinputd::ensure_vuinputd_running(&[]);
+
+    let (builder, _ipc) = podman::PodmanBuilder::new()
+        .run_cmd()
+        .rm()
+        .userns("auto")
         .with_ipc()
         .expect("failed to create IPC");
     let builder = builder

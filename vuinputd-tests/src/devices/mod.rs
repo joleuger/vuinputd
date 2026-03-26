@@ -8,8 +8,8 @@ use std::io;
 pub mod keyboard;
 pub mod mouse;
 pub mod ps4_gamepad;
-pub mod xbox_gamepad;
 pub mod utils;
+pub mod xbox_gamepad;
 
 pub use keyboard::KeyboardDevice;
 pub use mouse::MouseDevice;
@@ -26,13 +26,13 @@ pub const EV_ABS: u16 = 0x03;
 pub trait Device {
     fn name() -> &'static str;
     fn get_event_device(sysname: &str) -> Result<File, io::Error>;
-    
+
     /// Phase 1: open uinput, configure keys, call ui_dev_setup
-    fn setup(device:Option<&str>,name: &str) -> Result<i32, io::Error>;
-    
+    fn setup(device: Option<&str>, name: &str) -> Result<i32, io::Error>;
+
     /// Phase 2: call ui_dev_create, get sysname and devnode
     fn create(fd: i32) -> Result<String, io::Error>;
-    
+
     /// Phase 3: call ui_dev_destroy and close fd
     fn destroy(fd: i32);
 }
