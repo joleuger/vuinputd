@@ -8,84 +8,87 @@ use std::io;
 use std::{ffi::CStr, fs::File};
 use uinput_ioctls::*;
 
-// PS4 Gamepad codes
-const BTN_SOUTH: u16 = 304; // Cross
-const BTN_EAST: u16 = 305; // Circle
-const BTN_NORTH: u16 = 306; // Square
-const BTN_WEST: u16 = 307; // Triangle
-const BTN_TOP: u16 = 310; // L1
-const BTN_TOP2: u16 = 311; // R1
-const BTN_BASE: u16 = 312; // Share
-const BTN_BASE2: u16 = 313; // Options
-const BTN_BASE3: u16 = 314; // L3
-const BTN_BASE23: u16 = 315; // R3
-const BTN_TL: u16 = 316; // L2
-const BTN_TR: u16 = 317; // R2
-const BTN_SELECT: u16 = 318;
-const BTN_START: u16 = 319;
-const BTN_THUMBL: u16 = 320;
-const BTN_THUMBR: u16 = 321;
-const BTN_TOUCH: u16 = 322;
-const BTN_TR2: u16 = 323;
-const BTN_DPAD_UP: u16 = 325;
-const BTN_DPAD_DOWN: u16 = 326;
-const BTN_DPAD_LEFT: u16 = 327;
-const BTN_DPAD_RIGHT: u16 = 328;
-
-const ABS_X: u16 = 0;
-const ABS_Y: u16 = 1;
-const ABS_Z: u16 = 2;
-const ABS_RX: u16 = 3;
-const ABS_RY: u16 = 4;
-const ABS_RZ: u16 = 5;
-const ABS_THROTTLE: u16 = 6;
-const ABS_RUDDER: u16 = 7;
-const ABS_PRESSURE: u16 = 24;
-const ABS_DISTANCE: u16 = 32;
-const ABS_MT_POSITION_X: u16 = 47;
-const ABS_MT_POSITION_Y: u16 = 48;
-const ABS_MT_TRACKING_ID: u16 = 57;
-const ABS_MT_PRESSURE: u16 = 47;
-const ABS_MT_TOOL_TYPE: u16 = 55;
-const ABS_MT_WIDTH: u16 = 56;
-
 // Xbox Gamepad codes
-const BTN_A: u16 = 304; // A
-const BTN_B: u16 = 305; // B
-const BTN_X: u16 = 306; // X
-const BTN_Y: u16 = 307; // Y
-const BTN_TL2: u16 = 319; // LT
+// https://github.com/torvalds/linux/blob/master/Documentation/input/gamepad.rst
+// https://github.com/torvalds/linux/blob/master/include/uapi/linux/input-event-codes.h// Keys and Buttons
+// https://github.com/torvalds/linux/blob/master/drivers/input/joystick/xpad.c
+pub const BTN_SOUTH: u16 = 0x130;
+pub const BTN_EAST: u16 = 0x131;
+pub const BTN_NORTH: u16 = 0x133;
+pub const BTN_WEST: u16 = 0x134;
+pub const BTN_TL: u16 = 0x136;
+pub const BTN_TR: u16 = 0x137;
+pub const BTN_SELECT: u16 = 0x13a;
+pub const BTN_START: u16 = 0x13b;
+pub const BTN_MODE: u16 = 0x13c;
+pub const BTN_THUMBL: u16 = 0x13d;
+pub const BTN_THUMBR: u16 = 0x13e;
+
+// Absolute Axes
+pub const ABS_X: u16 = 0x00;
+pub const ABS_Y: u16 = 0x01;
+pub const ABS_Z: u16 = 0x02;
+pub const ABS_RX: u16 = 0x03;
+pub const ABS_RY: u16 = 0x04;
+pub const ABS_RZ: u16 = 0x05;
+pub const ABS_HAT0X: u16 = 0x10;
+pub const ABS_HAT0Y: u16 = 0x11;
+
+// Force Feedback
+// https://github.com/torvalds/linux/blob/master/include/uapi/linux/input.h
+pub const FF_RUMBLE: u16 = 0x50;
+pub const FF_PERIODIC: u16 = 0x51;
+pub const FF_CONSTANT: u16 = 0x52;
+pub const FF_RAMP: u16 = 0x57;
+pub const FF_SINE: u16 = 0x5a;
+pub const FF_GAIN: u16 = 0x60;
 
 /// Setup Xbox gamepad device
+/// https://github.com/LizardByte/Sunshine/blob/master/src/platform/linux/input/inputtino_gamepad.cpp
+/// https://github.com/games-on-whales/inputtino/blob/stable/src/uinput/joypad_xbox.cpp
 unsafe fn setup_xbox_gamepad(fd: c_int) -> io::Result<()> {
     // EV_SYN
     ui_set_evbit(fd, super::EV_SYN.try_into().unwrap())?;
+
     // EV_KEY
     ui_set_evbit(fd, super::EV_KEY.try_into().unwrap())?;
-    ui_set_keybit(fd, BTN_A.try_into().unwrap())?;
-    ui_set_keybit(fd, BTN_B.try_into().unwrap())?;
-    ui_set_keybit(fd, BTN_X.try_into().unwrap())?;
-    ui_set_keybit(fd, BTN_Y.try_into().unwrap())?;
-    ui_set_keybit(fd, BTN_TL.try_into().unwrap())?;
-    ui_set_keybit(fd, BTN_TR.try_into().unwrap())?;
-    ui_set_keybit(fd, BTN_SELECT.try_into().unwrap())?;
-    ui_set_keybit(fd, BTN_START.try_into().unwrap())?;
+    ui_set_keybit(fd, BTN_WEST.try_into().unwrap())?;
+    ui_set_keybit(fd, BTN_EAST.try_into().unwrap())?;
+    ui_set_keybit(fd, BTN_NORTH.try_into().unwrap())?;
+    ui_set_keybit(fd, BTN_SOUTH.try_into().unwrap())?;
     ui_set_keybit(fd, BTN_THUMBL.try_into().unwrap())?;
     ui_set_keybit(fd, BTN_THUMBR.try_into().unwrap())?;
-    ui_set_keybit(fd, BTN_TL2.try_into().unwrap())?;
-    ui_set_keybit(fd, BTN_TR2.try_into().unwrap())?;
-    ui_set_keybit(fd, BTN_DPAD_UP.try_into().unwrap())?;
-    ui_set_keybit(fd, BTN_DPAD_DOWN.try_into().unwrap())?;
-    ui_set_keybit(fd, BTN_DPAD_LEFT.try_into().unwrap())?;
-    ui_set_keybit(fd, BTN_DPAD_RIGHT.try_into().unwrap())?;
+    ui_set_keybit(fd, BTN_TR.try_into().unwrap())?;
+    ui_set_keybit(fd, BTN_TL.try_into().unwrap())?;
+    ui_set_keybit(fd, BTN_SELECT.try_into().unwrap())?;
+    ui_set_keybit(fd, BTN_MODE.try_into().unwrap())?;
+    ui_set_keybit(fd, BTN_START.try_into().unwrap())?;
+
     // EV_ABS
     ui_set_evbit(fd, super::EV_ABS.try_into().unwrap())?;
-    ui_set_absbit(fd, ABS_X.try_into().unwrap())?;
-    ui_set_absbit(fd, ABS_Y.try_into().unwrap())?;
-    ui_set_absbit(fd, ABS_RX.try_into().unwrap())?;
-    ui_set_absbit(fd, ABS_RY.try_into().unwrap())?;
-    ui_set_absbit(fd, ABS_PRESSURE.try_into().unwrap())?;
-    ui_set_absbit(fd, ABS_DISTANCE.try_into().unwrap())?;
+    // EV_ABS dpad
+    let abs_info_dpad = libc::input_absinfo { value: 0, minimum: -1, maximum: 1, fuzz: 0, flat: 0, resolution: 0 };
+    ui_abs_setup(fd, &libc::uinput_abs_setup { code: ABS_HAT0Y, absinfo: abs_info_dpad.clone() })?;
+    ui_abs_setup(fd, &libc::uinput_abs_setup { code: ABS_HAT0X, absinfo: abs_info_dpad.clone() })?;
+    // EV_ABS stick
+    let abs_info_stick = libc::input_absinfo { value: 0, minimum: -32768, maximum: 32767, fuzz: 16, flat: 128, resolution: 0 };
+    ui_abs_setup(fd, &libc::uinput_abs_setup { code: ABS_X, absinfo: abs_info_stick.clone() })?;
+    ui_abs_setup(fd, &libc::uinput_abs_setup { code: ABS_RX, absinfo: abs_info_stick.clone() })?;
+    ui_abs_setup(fd, &libc::uinput_abs_setup { code: ABS_Y, absinfo: abs_info_stick.clone() })?;
+    ui_abs_setup(fd, &libc::uinput_abs_setup { code: ABS_RY, absinfo: abs_info_stick.clone() })?;
+    // EV_ABS trigger
+    let abs_info_trigger = libc::input_absinfo { value: 0, minimum: 0, maximum: 255, fuzz: 0, flat: 0, resolution: 0 };
+    ui_abs_setup(fd, &libc::uinput_abs_setup { code: ABS_Z, absinfo: abs_info_trigger.clone() })?;
+    ui_abs_setup(fd, &libc::uinput_abs_setup { code: ABS_RZ, absinfo: abs_info_trigger.clone() })?;
+
+    // EV_FF
+    ui_set_evbit(fd, super::EV_FF.try_into().unwrap())?;
+    ui_set_ffbit(fd, FF_RUMBLE.try_into().unwrap())?;
+    ui_set_ffbit(fd, FF_CONSTANT.try_into().unwrap())?;
+    ui_set_ffbit(fd, FF_PERIODIC.try_into().unwrap())?;
+    ui_set_ffbit(fd, FF_SINE.try_into().unwrap())?;
+    ui_set_ffbit(fd, FF_RAMP.try_into().unwrap())?;
+    ui_set_ffbit(fd, FF_GAIN.try_into().unwrap())?;
 
     Ok(())
 }
@@ -166,5 +169,5 @@ impl Device for XboxGamepadDevice {
 use libc::{c_char, close};
 use std::ffi::CString;
 
-const SYS_INPUT_DIR: &str = "/sys/devices/virtual/input/";
-const BUS_USB: u16 = 0x03;
+pub const SYS_INPUT_DIR: &str = "/sys/devices/virtual/input/";
+pub const BUS_USB: u16 = 0x03;

@@ -2,6 +2,8 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
+// this file is ai genrated and contains many mistake that need to be fixed manually
+
 use super::Device;
 use libc::c_int;
 use std::io;
