@@ -2,10 +2,9 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
-use super::Device;
-use libc::c_int;
+use crate::devices::device_base::{fetch_device_node, open_uinput, Device, DeviceState, BUS_USB};
+use libc::{c_int, close, open};
 use std::io;
-use std::{ffi::CStr, fs::File};
 use uinput_ioctls::*;
 
 // Xbox Gamepad codes
@@ -67,19 +66,88 @@ unsafe fn setup_xbox_gamepad(fd: c_int) -> io::Result<()> {
     // EV_ABS
     ui_set_evbit(fd, super::EV_ABS.try_into().unwrap())?;
     // EV_ABS dpad
-    let abs_info_dpad = libc::input_absinfo { value: 0, minimum: -1, maximum: 1, fuzz: 0, flat: 0, resolution: 0 };
-    ui_abs_setup(fd, &libc::uinput_abs_setup { code: ABS_HAT0Y, absinfo: abs_info_dpad.clone() })?;
-    ui_abs_setup(fd, &libc::uinput_abs_setup { code: ABS_HAT0X, absinfo: abs_info_dpad.clone() })?;
+    let abs_info_dpad = libc::input_absinfo {
+        value: 0,
+        minimum: -1,
+        maximum: 1,
+        fuzz: 0,
+        flat: 0,
+        resolution: 0,
+    };
+    ui_abs_setup(
+        fd,
+        &libc::uinput_abs_setup {
+            code: ABS_HAT0Y,
+            absinfo: abs_info_dpad.clone(),
+        },
+    )?;
+    ui_abs_setup(
+        fd,
+        &libc::uinput_abs_setup {
+            code: ABS_HAT0X,
+            absinfo: abs_info_dpad.clone(),
+        },
+    )?;
     // EV_ABS stick
-    let abs_info_stick = libc::input_absinfo { value: 0, minimum: -32768, maximum: 32767, fuzz: 16, flat: 128, resolution: 0 };
-    ui_abs_setup(fd, &libc::uinput_abs_setup { code: ABS_X, absinfo: abs_info_stick.clone() })?;
-    ui_abs_setup(fd, &libc::uinput_abs_setup { code: ABS_RX, absinfo: abs_info_stick.clone() })?;
-    ui_abs_setup(fd, &libc::uinput_abs_setup { code: ABS_Y, absinfo: abs_info_stick.clone() })?;
-    ui_abs_setup(fd, &libc::uinput_abs_setup { code: ABS_RY, absinfo: abs_info_stick.clone() })?;
+    let abs_info_stick = libc::input_absinfo {
+        value: 0,
+        minimum: -32768,
+        maximum: 32767,
+        fuzz: 16,
+        flat: 128,
+        resolution: 0,
+    };
+    ui_abs_setup(
+        fd,
+        &libc::uinput_abs_setup {
+            code: ABS_X,
+            absinfo: abs_info_stick.clone(),
+        },
+    )?;
+    ui_abs_setup(
+        fd,
+        &libc::uinput_abs_setup {
+            code: ABS_RX,
+            absinfo: abs_info_stick.clone(),
+        },
+    )?;
+    ui_abs_setup(
+        fd,
+        &libc::uinput_abs_setup {
+            code: ABS_Y,
+            absinfo: abs_info_stick.clone(),
+        },
+    )?;
+    ui_abs_setup(
+        fd,
+        &libc::uinput_abs_setup {
+            code: ABS_RY,
+            absinfo: abs_info_stick.clone(),
+        },
+    )?;
     // EV_ABS trigger
-    let abs_info_trigger = libc::input_absinfo { value: 0, minimum: 0, maximum: 255, fuzz: 0, flat: 0, resolution: 0 };
-    ui_abs_setup(fd, &libc::uinput_abs_setup { code: ABS_Z, absinfo: abs_info_trigger.clone() })?;
-    ui_abs_setup(fd, &libc::uinput_abs_setup { code: ABS_RZ, absinfo: abs_info_trigger.clone() })?;
+    let abs_info_trigger = libc::input_absinfo {
+        value: 0,
+        minimum: 0,
+        maximum: 255,
+        fuzz: 0,
+        flat: 0,
+        resolution: 0,
+    };
+    ui_abs_setup(
+        fd,
+        &libc::uinput_abs_setup {
+            code: ABS_Z,
+            absinfo: abs_info_trigger.clone(),
+        },
+    )?;
+    ui_abs_setup(
+        fd,
+        &libc::uinput_abs_setup {
+            code: ABS_RZ,
+            absinfo: abs_info_trigger.clone(),
+        },
+    )?;
 
     // EV_FF
     ui_set_evbit(fd, super::EV_FF.try_into().unwrap())?;
@@ -93,81 +161,84 @@ unsafe fn setup_xbox_gamepad(fd: c_int) -> io::Result<()> {
     Ok(())
 }
 
-pub struct XboxGamepadDevice;
+pub struct XboxGamepadDevice {
+    state: DeviceState,
+}
 
 impl Device for XboxGamepadDevice {
     fn name() -> &'static str {
         "Xbox Gamepad"
     }
 
-    fn get_event_device(sysname: &str) -> Result<File, io::Error> {
-        super::utils::fetch_device_node(sysname).and_then(|devnode| File::open(&devnode))
+    fn state(&self) -> &DeviceState {
+        &self.state
     }
 
-    fn setup(device: Option<&str>, name: &str) -> Result<i32, io::Error> {
-        let fd = super::utils::open_uinput(device)?;
-        unsafe { setup_xbox_gamepad(fd) }?;
-
-        unsafe {
-            let mut usetup: libc::uinput_setup = std::mem::zeroed();
-            usetup.id.bustype = BUS_USB;
-            usetup.id.vendor = 0xbeef;
-            usetup.id.product = 0xdead;
-
-            let name_cstr = CString::new(name).unwrap();
-            let name_ptr = usetup.name.as_mut_ptr() as *mut c_char;
-            std::ptr::copy_nonoverlapping(
-                name_cstr.as_ptr(),
-                name_ptr,
-                name_cstr.to_bytes_with_nul().len(),
-            );
-
-            let usetup_ptr = &mut usetup as *mut libc::uinput_setup;
-            ui_dev_setup(fd, usetup_ptr).map_err(|e| {
-                eprintln!("ui_dev_setup failed: {:?}", e);
-                e
-            })?;
-        }
-
-        Ok(fd)
+    fn state_mut(&mut self) -> &mut DeviceState {
+        &mut self.state
     }
 
-    fn create(fd: i32) -> Result<String, io::Error> {
+    fn get_event_device(&self) -> Result<c_int, io::Error> {
+        Ok(self.state.event_device_fd)
+    }
+
+    fn create(device: Option<&str>, name: &str) -> Result<Self, io::Error> {
+        let fd = open_uinput(device)?;
+
+        unsafe { setup_xbox_gamepad(fd)? };
+
+        let temp_device = XboxGamepadDevice {
+            state: DeviceState {
+                uinput_fd: fd,
+                sysname: String::new(),
+                device_name: name.to_string(),
+                event_device_node: String::new(),
+                event_device_fd: -1,
+                events: Vec::new(),
+            },
+        };
+        temp_device.setup_device(name, 0xbeef, 0xdead, BUS_USB)?;
+
         unsafe {
             ui_dev_create(fd).map_err(|e| {
                 eprintln!("ui_dev_create failed: {:?}", e);
                 e
             })?;
-
-            let mut resultbuf: [c_char; 64] = [0; 64];
-            ui_get_sysname(fd, resultbuf.as_mut_slice()).map_err(|e| {
-                eprintln!("ui_get_sysname failed: {:?}", e);
-                e
-            })?;
-
-            let sysname = format!(
-                "{}{}",
-                SYS_INPUT_DIR,
-                CStr::from_ptr(resultbuf.as_ptr()).to_string_lossy()
-            );
-
-            Ok(sysname)
         }
+
+        let sysname = temp_device.get_sysname()?;
+
+        let event_device_node = fetch_device_node(&sysname)?;
+        let event_device_fd = unsafe {
+            open(
+                event_device_node.as_ptr() as *const i8,
+                libc::O_RDONLY | libc::O_NONBLOCK,
+            )
+        };
+        if event_device_fd < 0 {
+            return Err(io::Error::last_os_error());
+        }
+
+        Ok(XboxGamepadDevice {
+            state: DeviceState {
+                uinput_fd: fd,
+                sysname,
+                device_name: name.to_string(),
+                event_device_node,
+                event_device_fd,
+                events: Vec::new(),
+            },
+        })
     }
 
-    fn destroy(fd: i32) {
+    fn destroy(self) {
         unsafe {
-            ui_dev_destroy(fd).unwrap_or_else(|e| {
+            ui_dev_destroy(self.state.uinput_fd).unwrap_or_else(|e| {
                 eprintln!("ui_dev_destroy failed: {:?}", e);
                 std::process::exit(1);
             });
-            close(fd);
+            close(self.state.uinput_fd);
+            close(self.state.event_device_fd);
         }
     }
 }
-
-use libc::{c_char, close};
-use std::ffi::CString;
-
-pub const SYS_INPUT_DIR: &str = "/sys/devices/virtual/input/";
-pub const BUS_USB: u16 = 0x03;

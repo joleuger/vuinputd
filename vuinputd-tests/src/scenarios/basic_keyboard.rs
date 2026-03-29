@@ -6,7 +6,7 @@ use std::thread;
 use std::time::Duration;
 
 use crate::devices::keyboard::KeyboardDevice;
-use crate::devices::{utils, Device};
+use crate::devices::{Device, EV_KEY};
 use crate::scenarios::ScenarioArgs;
 use crate::test_log::TestLog;
 
@@ -20,26 +20,21 @@ impl BasicKeyboard {
             .dev_path
             .clone()
             .unwrap_or_else(|| "/dev/uinput".to_string());
-        let fd = KeyboardDevice::setup(Some(&device), "Example Keyboard")?;
-        let sysname = KeyboardDevice::create(fd)?;
-        eprintln!("sysname: {}", sysname);
+        let mut keyboard = KeyboardDevice::create(Some(&device), "Example Keyboard")?;
+        eprintln!("sysname: {}", keyboard.sysname());
 
         thread::sleep(Duration::from_secs(1));
 
-        let event_device = std::fs::OpenOptions::new()
-            .read(true)
-            .open(&utils::fetch_device_node(&sysname)?)?;
-
-        let ev1 = utils::emit_read_and_log(fd, &event_device, 0x01, KEY_SPACE, 1)?;
-        let ev2 = utils::emit_read_and_log(fd, &event_device, 0x01, KEY_SPACE, 0)?;
+        let _ev1 = keyboard.emit_read_and_log(EV_KEY, KEY_SPACE, 1)?;
+        let _ev2 = keyboard.emit_read_and_log(EV_KEY, KEY_SPACE, 0)?;
 
         let eventlog = TestLog {
-            events: vec![ev1, ev2],
+            events: keyboard.event_log().to_vec(),
         };
         let serialized = serde_json::to_string(&eventlog).unwrap();
         println!("Event log: {}", serialized);
 
-        KeyboardDevice::destroy(fd);
+        KeyboardDevice::destroy(keyboard);
         Ok(())
     }
 }

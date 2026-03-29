@@ -5,7 +5,7 @@ use std::thread;
 use std::time::Duration;
 
 use crate::devices::ps4_gamepad::Ps4GamepadDevice;
-use crate::devices::{utils, Device};
+use crate::devices::{Device, EV_KEY};
 use crate::scenarios::ScenarioArgs;
 use crate::test_log::{LoggedInputEvent, TestLog};
 
@@ -20,26 +20,21 @@ impl BasicPs4Gamepad {
             .clone()
             .unwrap_or_else(|| "/dev/uinput".to_string());
 
-        let fd = Ps4GamepadDevice::setup(Some(&device), "PS4 Gamepad")?;
-        let sysname = Ps4GamepadDevice::create(fd)?;
-        eprintln!("sysname: {}", sysname);
+        let mut gamepad = Ps4GamepadDevice::create(Some(&device), "PS4 Gamepad")?;
+        eprintln!("sysname: {}", gamepad.sysname());
 
         thread::sleep(Duration::from_secs(1));
 
-        let event_device = std::fs::OpenOptions::new()
-            .read(true)
-            .open(&utils::fetch_device_node(&sysname)?)?;
-
-        let ev1 = utils::emit_read_and_log(fd, &event_device, 0x01, BTN_SOUTH, 1)?;
-        let ev2 = utils::emit_read_and_log(fd, &event_device, 0x01, BTN_SOUTH, 0)?;
+        let _ev1 = gamepad.emit_read_and_log(EV_KEY, BTN_SOUTH, 1)?;
+        let _ev2 = gamepad.emit_read_and_log(EV_KEY, BTN_SOUTH, 0)?;
 
         let eventlog = TestLog {
-            events: vec![ev1, ev2],
+            events: gamepad.event_log().to_vec(),
         };
         let serialized = serde_json::to_string(&eventlog).unwrap();
         println!("Event log: {}", serialized);
 
-        Ps4GamepadDevice::destroy(fd);
+        Ps4GamepadDevice::destroy(gamepad);
         Ok(())
     }
 }

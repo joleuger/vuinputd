@@ -4,10 +4,9 @@
 
 // this file is ai genrated and contains many mistake that need to be fixed manually
 
-use super::Device;
-use libc::c_int;
+use crate::devices::device_base::{fetch_device_node, open_uinput, Device, DeviceState, BUS_USB};
+use libc::{c_int, close, open};
 use std::io;
-use std::{ffi::CStr, fs::File};
 use uinput_ioctls::*;
 
 // PS4 Gamepad codes
@@ -58,7 +57,9 @@ const BTN_X: u16 = 306; // X
 const BTN_Y: u16 = 307; // Y
 const BTN_TL2: u16 = 319; // LT
 
-pub struct Ps4GamepadDevice;
+pub struct Ps4GamepadDevice {
+    state: DeviceState,
+}
 
 /// Setup PS4 gamepad device
 unsafe fn setup_ps4_gamepad(fd: c_int) -> io::Result<()> {
@@ -105,74 +106,75 @@ impl Device for Ps4GamepadDevice {
         "PS4 Gamepad"
     }
 
-    fn get_event_device(sysname: &str) -> Result<File, io::Error> {
-        super::utils::fetch_device_node(sysname).and_then(|devnode| File::open(&devnode))
+    fn state(&self) -> &DeviceState {
+        &self.state
     }
 
-    fn setup(device: Option<&str>, name: &str) -> Result<i32, io::Error> {
-        let fd = super::utils::open_uinput(device)?;
-        unsafe { setup_ps4_gamepad(fd) }?;
-
-        unsafe {
-            let mut usetup: libc::uinput_setup = std::mem::zeroed();
-            usetup.id.bustype = BUS_USB;
-            usetup.id.vendor = 0xbeef;
-            usetup.id.product = 0xdead;
-
-            let name_cstr = CString::new(name).unwrap();
-            let name_ptr = usetup.name.as_mut_ptr() as *mut c_char;
-            std::ptr::copy_nonoverlapping(
-                name_cstr.as_ptr(),
-                name_ptr,
-                name_cstr.to_bytes_with_nul().len(),
-            );
-
-            let usetup_ptr = &mut usetup as *mut libc::uinput_setup;
-            ui_dev_setup(fd, usetup_ptr).map_err(|e| {
-                eprintln!("ui_dev_setup failed: {:?}", e);
-                e
-            })?;
-        }
-
-        Ok(fd)
+    fn state_mut(&mut self) -> &mut DeviceState {
+        &mut self.state
     }
 
-    fn create(fd: i32) -> Result<String, io::Error> {
+    fn get_event_device(&self) -> Result<c_int, io::Error> {
+        Ok(self.state.event_device_fd)
+    }
+
+    fn create(device: Option<&str>, name: &str) -> Result<Self, io::Error> {
+        let fd = open_uinput(device)?;
+
+        unsafe { setup_ps4_gamepad(fd)? };
+
+        let temp_device = Ps4GamepadDevice {
+            state: DeviceState {
+                uinput_fd: fd,
+                sysname: String::new(),
+                device_name: name.to_string(),
+                event_device_node: String::new(),
+                event_device_fd: -1,
+                events: Vec::new(),
+            },
+        };
+        temp_device.setup_device(name, 0xbeef, 0xdead, BUS_USB)?;
+
         unsafe {
             ui_dev_create(fd).map_err(|e| {
                 eprintln!("ui_dev_create failed: {:?}", e);
                 e
             })?;
-
-            let mut resultbuf: [c_char; 64] = [0; 64];
-            ui_get_sysname(fd, resultbuf.as_mut_slice()).map_err(|e| {
-                eprintln!("ui_get_sysname failed: {:?}", e);
-                e
-            })?;
-
-            let sysname = format!(
-                "{}{}",
-                SYS_INPUT_DIR,
-                CStr::from_ptr(resultbuf.as_ptr()).to_string_lossy()
-            );
-
-            Ok(sysname)
         }
+
+        let sysname = temp_device.get_sysname()?;
+
+        let event_device_node = fetch_device_node(&sysname)?;
+        let event_device_fd = unsafe {
+            open(
+                event_device_node.as_ptr() as *const i8,
+                libc::O_RDONLY | libc::O_NONBLOCK,
+            )
+        };
+        if event_device_fd < 0 {
+            return Err(io::Error::last_os_error());
+        }
+
+        Ok(Ps4GamepadDevice {
+            state: DeviceState {
+                uinput_fd: fd,
+                sysname,
+                device_name: name.to_string(),
+                event_device_node,
+                event_device_fd,
+                events: Vec::new(),
+            },
+        })
     }
 
-    fn destroy(fd: i32) {
+    fn destroy(self) {
         unsafe {
-            ui_dev_destroy(fd).unwrap_or_else(|e| {
+            ui_dev_destroy(self.state.uinput_fd).unwrap_or_else(|e| {
                 eprintln!("ui_dev_destroy failed: {:?}", e);
                 std::process::exit(1);
             });
-            close(fd);
+            close(self.state.uinput_fd);
+            close(self.state.event_device_fd);
         }
     }
 }
-
-use libc::{c_char, close};
-use std::ffi::CString;
-
-const SYS_INPUT_DIR: &str = "/sys/devices/virtual/input/";
-const BUS_USB: u16 = 0x03;

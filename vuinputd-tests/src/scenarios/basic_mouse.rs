@@ -5,7 +5,7 @@ use std::thread;
 use std::time::Duration;
 
 use crate::devices::mouse::MouseDevice;
-use crate::devices::{utils, Device};
+use crate::devices::{Device, EV_KEY};
 use crate::scenarios::ScenarioArgs;
 use crate::test_log::{LoggedInputEvent, TestLog};
 
@@ -20,26 +20,21 @@ impl BasicMouse {
             .clone()
             .unwrap_or_else(|| "/dev/uinput".to_string());
 
-        let fd = MouseDevice::setup(Some(&device), "Example Mouse")?;
-        let sysname = MouseDevice::create(fd)?;
-        eprintln!("sysname: {}", sysname);
+        let mut mouse = MouseDevice::create(Some(&device), "Example Mouse")?;
+        eprintln!("sysname: {}", mouse.sysname());
 
         thread::sleep(Duration::from_secs(1));
 
-        let event_device = std::fs::OpenOptions::new()
-            .read(true)
-            .open(&utils::fetch_device_node(&sysname)?)?;
-
-        let ev1 = utils::emit_read_and_log(fd, &event_device, 0x01, BTN_LEFT, 1)?;
-        let ev2 = utils::emit_read_and_log(fd, &event_device, 0x01, BTN_LEFT, 0)?;
+        let _ev1 = mouse.emit_read_and_log(EV_KEY, BTN_LEFT, 1)?;
+        let _ev2 = mouse.emit_read_and_log(EV_KEY, BTN_LEFT, 0)?;
 
         let eventlog = TestLog {
-            events: vec![ev1, ev2],
+            events: mouse.event_log().to_vec(),
         };
         let serialized = serde_json::to_string(&eventlog).unwrap();
         println!("Event log: {}", serialized);
 
-        MouseDevice::destroy(fd);
+        MouseDevice::destroy(mouse);
         Ok(())
     }
 }

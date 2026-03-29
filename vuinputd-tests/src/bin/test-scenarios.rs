@@ -5,9 +5,10 @@
 use clap::{Parser, Subcommand};
 use vuinputd_tests::scenarios::{
     basic_keyboard::BasicKeyboard, basic_mouse::BasicMouse, basic_ps4_gamepad::BasicPs4Gamepad,
-    basic_xbox_gamepad::BasicXboxGamepad, /*
-                                          reuse_keyboard::ReuseKeyboard, reuse_xbox_gamepad::ReuseXboxGamepad,
-                                          ScenarioArgs, stress_keyboard::StressKeyboard, stress_xbox_gamepad::StressXboxGamepad, */
+    basic_xbox_gamepad::BasicXboxGamepad,
+    ff_xbox_gamepad::FfXboxGamepad, /*
+                                    reuse_keyboard::ReuseKeyboard, reuse_xbox_gamepad::ReuseXboxGamepad,
+                                    ScenarioArgs, stress_keyboard::StressKeyboard, stress_xbox_gamepad::StressXboxGamepad, */
     ScenarioArgs,
 };
 
@@ -40,6 +41,9 @@ enum Commands {
 
     /// Basic Xbox gamepad test
     BasicXboxGamepad,
+
+    /// Force feedback / Vibration Xbox gamepad test
+    FfXboxGamepad,
     /*
     /// Reuse keyboard test (create, destroy, recreate)
     ReuseKeyboard,
@@ -68,6 +72,7 @@ fn main() -> Result<(), std::io::Error> {
         Commands::BasicMouse => BasicMouse::run(&args),
         Commands::BasicPs4Gamepad => BasicPs4Gamepad::run(&args),
         Commands::BasicXboxGamepad => BasicXboxGamepad::run(&args),
+        Commands::FfXboxGamepad => FfXboxGamepad::run(&args),
         /*
         Commands::ReuseKeyboard => ReuseKeyboard::run(&args),
         Commands::ReuseXboxGamepad => ReuseXboxGamepad::run(&args),
