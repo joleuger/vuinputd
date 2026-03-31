@@ -90,6 +90,8 @@ It reliably demonstrates the core concept — exposing `/dev/uinput` devices ins
 
 ### ✅ Goals for Production Readiness
 
+* [ ] **Vibration/Force Feedback support:**
+
 * [ ] **Steam input support:**
   Steam input is not supported, yet. For some strange reasons, steam creates 16 virtual devices. Maybe a race.
 
