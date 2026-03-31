@@ -133,7 +133,7 @@ impl Device for Ps4GamepadDevice {
                 events: Vec::new(),
             },
         };
-        temp_device.setup_device(name, 0xbeef, 0xdead, BUS_USB)?;
+        temp_device.setup_device(name, 0xbeef, 0xdead, BUS_USB, 10)?;
 
         unsafe {
             ui_dev_create(fd).map_err(|e| {

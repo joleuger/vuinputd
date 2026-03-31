@@ -298,7 +298,7 @@ impl Device for KeyboardDevice {
                 events: Vec::new(),
             },
         };
-        temp_device.setup_device(name, 0xbeef, 0xdead, BUS_USB)?;
+        temp_device.setup_device(name, 0xbeef, 0xdead, BUS_USB, 0)?;
 
         unsafe {
             ui_dev_create(fd).map_err(|e| {

@@ -5,12 +5,11 @@
 use std::thread;
 use std::time::Duration;
 
-use crate::devices::xbox_gamepad::XboxGamepadDevice;
+use crate::devices::xbox_gamepad::{self, upload_effect, XboxGamepadDevice, FF_RUMBLE};
 use crate::devices::{Device, EV_FF};
 use crate::scenarios::ScenarioArgs;
 use crate::test_log::{LoggedInputEvent, TestLog};
-
-const BTN_A: u16 = 304;
+use libc::{self, ff_effect, ff_replay, ff_trigger};
 
 pub struct FfXboxGamepad;
 
@@ -26,18 +25,32 @@ impl FfXboxGamepad {
 
         thread::sleep(Duration::from_secs(1));
 
-        let effect = libc::ff_effect {
-            type_: todo!(),
-            id: todo!(),
-            direction: todo!(),
-            trigger: todo!(),
-            replay: todo!(),
-            u: todo!(),
-        };
+        eprintln!("upload a simple RUMBLE effect");
+        let mut effect: ff_effect = unsafe { std::mem::zeroed() };
+        effect.type_ = FF_RUMBLE;
+        effect.id = -1; // new effect
+        effect.direction = 0;
+        effect.trigger.button = 0;
+        effect.trigger.interval = 0;
+        effect.replay.length = 5000;
+        effect.replay.delay = 1000;
+        effect.u = xbox_gamepad::create_rumble_array(0x8000, 0x0);
 
-        let _ev_play_effect = gamepad.emit_read_and_log(EV_FF, effect.id.try_into().unwrap(), 3)?;
+        // ensure uploaded effect gets processed
+        gamepad.read_process_ff_event_from_uinput();
+        // Upload effect via ioctl
+        let effect_id = upload_effect(gamepad.state().event_device_fd, &mut effect)?;
+
+        eprintln!("Uploaded effect with id: {} {}", effect_id, effect.id);
         thread::sleep(Duration::from_secs(1));
-        let _ev_stop_effect = gamepad.emit_read_and_log(EV_FF, effect.id.try_into().unwrap(), 0)?;
+
+        // Play effect (value=1)
+        let _play_effect_event =
+            gamepad.emit_read_and_log(EV_FF, effect_id.try_into().unwrap(), 1)?;
+        thread::sleep(Duration::from_secs(1));
+        let _stop_effect_event =
+            gamepad.emit_read_and_log(EV_FF, effect_id.try_into().unwrap(), 0)?;
+        thread::sleep(Duration::from_secs(1));
 
         let eventlog = TestLog {
             events: gamepad.event_log().to_vec(),

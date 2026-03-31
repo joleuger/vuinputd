@@ -3,7 +3,8 @@
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
 use crate::devices::device_base::{fetch_device_node, open_uinput, Device, DeviceState, BUS_USB};
-use libc::{c_int, close, open};
+use libc::{c_int, close, ff_effect, input_event, open, uinput_ff_upload};
+use nix::{ioctl_write_int, ioctl_write_ptr};
 use std::io;
 use uinput_ioctls::*;
 
@@ -41,6 +42,15 @@ pub const FF_CONSTANT: u16 = 0x52;
 pub const FF_RAMP: u16 = 0x57;
 pub const FF_SINE: u16 = 0x5a;
 pub const FF_GAIN: u16 = 0x60;
+
+const EV_UINPUT: u16 = 0x0101;
+const UI_FF_UPLOAD: u16 = 1;
+const UI_FF_ERASE: u16 = 2;
+
+// EVIOCSFF ioctl command for Force Feedback Upload
+ioctl_write_ptr!(eviocsff, b'E', 0x80, ff_effect);
+// EVIOCRMFF ioctl command for Force Feedback erase
+ioctl_write_int!(eviocrmff, b'E', 0x81);
 
 /// Setup Xbox gamepad device
 /// https://github.com/LizardByte/Sunshine/blob/master/src/platform/linux/input/inputtino_gamepad.cpp
@@ -161,6 +171,36 @@ unsafe fn setup_xbox_gamepad(fd: c_int) -> io::Result<()> {
     Ok(())
 }
 
+/// Generates the opaque `u` array for a rumble effect on 64-bit systems
+#[cfg(target_pointer_width = "64")]
+pub fn create_rumble_array(strong_magnitude: u16, weak_magnitude: u16) -> [u64; 4] {
+    let mut u = [0u64; 4];
+
+    // Create an 8-byte array representing the memory of a u64
+    let mut bytes = [0u8; 8];
+
+    // Place the strong magnitude at offset 0 and weak at offset 2
+    // using native endianness to match exactly what the kernel expects.
+    bytes[0..2].copy_from_slice(&strong_magnitude.to_ne_bytes());
+    bytes[2..4].copy_from_slice(&weak_magnitude.to_ne_bytes());
+
+    // Convert those bytes back into a native u64 and place it in the union array
+    u[0] = u64::from_ne_bytes(bytes);
+
+    u
+}
+
+/// Upload a force feedback effect to the device
+/// Returns the effect id on success
+pub fn upload_effect(fd: c_int, effect: *mut ff_effect) -> io::Result<i16> {
+    unsafe {
+        eviocsff(fd, effect).unwrap();
+    }
+    // Effect id is saved as effect.id
+    let id = unsafe { (*effect).id };
+    Ok(id)
+}
+
 pub struct XboxGamepadDevice {
     state: DeviceState,
 }
@@ -197,7 +237,7 @@ impl Device for XboxGamepadDevice {
                 events: Vec::new(),
             },
         };
-        temp_device.setup_device(name, 0xbeef, 0xdead, BUS_USB)?;
+        temp_device.setup_device(name, 0xbeef, 0xdead, BUS_USB, 10)?;
 
         unsafe {
             ui_dev_create(fd).map_err(|e| {
@@ -240,5 +280,52 @@ impl Device for XboxGamepadDevice {
             close(self.state.uinput_fd);
             close(self.state.event_device_fd);
         }
+    }
+}
+
+impl XboxGamepadDevice {
+    pub fn read_process_ff_event_from_uinput(&self) {
+        // Copy the i32 file descriptor so we can move it into the thread safely
+        let fd = self.state().uinput_fd;
+
+        std::thread::spawn(move || {
+            // Buffer for the raw bytes
+            let mut buffer = [0u8; 256];
+
+            // Calling C functions always requires an unsafe block
+            let result =
+                unsafe { libc::read(fd, buffer.as_mut_ptr() as *mut libc::c_void, buffer.len()) };
+
+            // libc::read returns an isize (ssize_t in C)
+            if result < 0 {
+                // result < 0 means an error occurred. We use std::io::Error::last_os_error()
+                // to get the correct OS error message based on the C `errno`.
+                eprintln!(
+                    "Error reading in thread: {}",
+                    std::io::Error::last_os_error()
+                );
+                return;
+            } else if result == 0 {
+                // 0 bytes usually means End-Of-File (EOF) or that the device was closed
+                println!("0 bytes (EOF) - Terminating thread");
+                return;
+            } else if result == 24 {
+                println!("read_process_ff_event_from_uinput: processing input event (read)");
+                let input_event = buffer.as_ptr() as *const libc::input_event;
+                let input_event = unsafe { *input_event };
+                if input_event.type_ == EV_UINPUT && input_event.code == UI_FF_UPLOAD {
+                    let mut upload: uinput_ff_upload = unsafe { std::mem::zeroed() };
+                    upload.request_id = input_event.value.try_into().unwrap();
+                    unsafe {
+                        let ptr = &mut upload as *mut uinput_ff_upload;
+                        ui_begin_ff_upload(fd, ptr).unwrap();
+                        println!("effect type: {}", upload.effect.type_);
+                        ui_end_ff_upload(fd, ptr).unwrap();
+                    };
+                }
+            } else {
+                println!("Read {} bytes", result);
+            }
+        });
     }
 }

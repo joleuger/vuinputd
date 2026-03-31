@@ -3,7 +3,7 @@
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
 use crate::test_log::LoggedInputEvent;
-use libc::{c_int, close, open, write, O_NONBLOCK, O_WRONLY};
+use libc::{c_int, close, open, write, O_NONBLOCK, O_RDWR, O_WRONLY};
 use libc::{input_event, timespec, uinput_setup, CLOCK_MONOTONIC};
 use std::ffi::{CStr, CString};
 use std::fs::File;
@@ -107,12 +107,20 @@ pub trait Device: Sized {
     }
 
     /// Setup the uinput device (calls ui_dev_setup and ui_get_sysname)
-    fn setup_device(&self, name: &str, vendor: u16, product: u16, bustype: u16) -> io::Result<()> {
+    fn setup_device(
+        &self,
+        name: &str,
+        vendor: u16,
+        product: u16,
+        bustype: u16,
+        ff_effects_max: u32,
+    ) -> io::Result<()> {
         unsafe {
             let mut usetup: uinput_setup = zeroed();
             usetup.id.bustype = bustype;
             usetup.id.vendor = vendor;
             usetup.id.product = product;
+            usetup.ff_effects_max = ff_effects_max;
 
             let name_cstr = CString::new(name).unwrap();
             let name_ptr = usetup.name.as_mut_ptr() as *mut c_char;
@@ -237,7 +245,7 @@ pub fn open_uinput(device: Option<&str>) -> io::Result<i32> {
     };
 
     let path = std::ffi::CString::new(device).unwrap();
-    let fd = unsafe { open(path.as_ptr(), O_WRONLY | O_NONBLOCK) };
+    let fd = unsafe { open(path.as_ptr(), O_RDWR | O_NONBLOCK) };
     if fd < 0 {
         eprintln!("error opening uinput");
         return Err(io::Error::last_os_error());
