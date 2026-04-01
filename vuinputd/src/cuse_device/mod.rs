@@ -6,6 +6,7 @@ pub mod device_policy;
 pub mod state;
 pub mod vuinput_ioctl;
 pub mod vuinput_open;
+pub mod vuinput_read;
 pub mod vuinput_release;
 pub mod vuinput_write;
 
@@ -29,7 +30,7 @@ pub fn vuinput_make_cuse_ops() -> cuse_lowlevel::cuse_lowlevel_ops {
         init_done: None,
         destroy: None,
         open: Some(vuinput_open::vuinput_open),
-        read: None,
+        read: Some(vuinput_read::vuinput_read),
         write: Some(vuinput_write::vuinput_write),
         flush: None,
         release: Some(vuinput_release::vuinput_release),
