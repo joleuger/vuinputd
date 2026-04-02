@@ -5,13 +5,16 @@
 use ::cuse_lowlevel::*;
 use libc::ENOENT;
 use libc::O_CLOEXEC;
+use libc::O_NONBLOCK;
 use log::{debug, error};
 use std::fs::OpenOptions;
+use std::os::fd::AsFd;
 use std::os::unix::fs::OpenOptionsExt;
 use std::path::Path;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::OnceLock;
 
+use crate::cuse_device::evdev_write_watcher::EVDEV_WRITE_WATCHER;
 use crate::cuse_device::*;
 use crate::process_tools::{get_requesting_process, Pid};
 
@@ -43,21 +46,31 @@ pub unsafe extern "C" fn vuinput_open(
     let open_vuinput_result = OpenOptions::new()
         .read(true)
         .write(true)
-        //.custom_flags(O_NONBLOCK)
+        .custom_flags(O_NONBLOCK)
         .custom_flags(O_CLOEXEC)
         .open(Path::new("/dev/uinput"));
     match open_vuinput_result {
         Ok(v) => {
+            let vu_fh: VuFileHandle = VuFileHandle::Fh(fh);
+            let uinput_fd: std::os::unix::prelude::BorrowedFd<'_> = v.as_fd();
             insert_vuinput_state(
-                &VuFileHandle::from_fuse_file_info(_fi.as_ref().unwrap()),
+                &vu_fh,
                 VuInputState {
                     file: v,
                     requesting_process,
                     input_device: None,
                     keytracker: KeyTracker::new(),
+                    poll: PollState::new(),
                 },
             )
             .unwrap();
+            EVDEV_WRITE_WATCHER
+                .get()
+                .unwrap()
+                .lock()
+                .unwrap()
+                .add_device(vu_fh)
+                .unwrap();
             fuse_lowlevel::fuse_reply_open(_req, _fi);
         }
         Err(e) => {

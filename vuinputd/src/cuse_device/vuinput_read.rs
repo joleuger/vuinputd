@@ -32,16 +32,17 @@ pub unsafe extern "C" fn vuinput_read(
         get_vuinput_state(&VuFileHandle::from_fuse_file_info(_fi.as_ref().unwrap())).unwrap();
     let mut vuinput_state = vuinput_state_mutex.lock().unwrap();
 
-    let normal_size = std::mem::size_of::<libc::input_event>();
+    const NORMAL_SIZE: usize = std::mem::size_of::<libc::input_event>();
     let is_compat = vuinput_state.requesting_process.is_compat;
     // TODO: ARM: && !compat_uses_64bit_time()
 
     let mut buffer: [u8; 24] = [0; 24];
 
     // read up to 24 bytes
+    // todo: non-blocking or timeout
     let result = vuinput_state.file.read(&mut buffer);
     match result {
-        Ok(normal_size) => {
+        Ok(NORMAL_SIZE) => {
             if (!is_compat) {
                 let buffer = buffer.as_ptr() as *const i8;
                 fuse_lowlevel::fuse_reply_buf(_req, buffer, 24);
@@ -63,4 +64,10 @@ pub unsafe extern "C" fn vuinput_read(
             fuse_lowlevel::fuse_reply_err(_req, EIO);
         }
     }
+    /*
+        if drained_to_eagain {
+        state.poll.readable = false;
+    } else {
+        state.poll.readable = true;
+    } */
 }

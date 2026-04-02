@@ -4,11 +4,16 @@
 
 use std::collections::HashMap;
 use std::fs::File;
+use std::ptr::NonNull;
 use std::sync::{Arc, Mutex, OnceLock, RwLock};
 
 use ::cuse_lowlevel::*;
+use smallvec::SmallVec;
 
 use crate::process_tools::RequestingProcess;
+use smallvec::smallvec;
+
+pub type PendingPollHandles = SmallVec<[*mut fuse_lowlevel::fuse_pollhandle; 1]>;
 
 #[derive(Debug)]
 pub struct VuInputDevice {
@@ -38,12 +43,55 @@ impl KeyTracker {
     }
 }
 
+/// this data structure ensures poll and read are synchronized.
+/// poll() and read() must synchronize through one shared readines
+/// state, and the state transitions must be done under the same per-handle mutex.
+/// Ensure, we have no lost-wakeup races like:
+/// 1) watcher sets readable
+/// 2) read() drains and clears readable
+/// 3) poll() stores waiter too late
+/// 4) nobody wakes it anymore
+#[derive(Debug, Default)]
+pub struct PollState {
+    /// Sticky readiness latch:
+    /// true once evdev became readable, false again after read/drain.
+    pub readable: bool,
+
+    /// Pending FUSE poll waiters for this device.
+    /// Optimized for the common case of 0 or 1 waiter, but supports
+    /// multiple concurrent poll() callers correctly.
+    pub pending: SmallVec<[NonNull<fuse_lowlevel::fuse_pollhandle>; 1]>,
+}
+
+impl PollState {
+    pub fn new() -> PollState {
+        PollState {
+            readable: false,
+            pending: smallvec![],
+        }
+    }
+    pub fn has_waiters(&self) -> bool {
+        !self.pending.is_empty()
+    }
+
+    pub fn add_waiter(&mut self, handle: NonNull<fuse_lowlevel::fuse_pollhandle>) {
+        self.pending.push(handle);
+    }
+
+    pub fn take_waiters(&mut self) -> SmallVec<[NonNull<fuse_lowlevel::fuse_pollhandle>; 1]> {
+        std::mem::take(&mut self.pending)
+    }
+}
+
+unsafe impl Send for PollState {}
+
 #[derive(Debug)]
 pub struct VuInputState {
     pub file: File,
     pub requesting_process: RequestingProcess,
     pub input_device: Option<VuInputDevice>,
     pub keytracker: KeyTracker,
+    pub poll: PollState,
 }
 
 #[derive(Debug, Eq, Hash, PartialEq, Clone)]

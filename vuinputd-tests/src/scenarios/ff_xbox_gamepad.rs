@@ -11,6 +11,7 @@ use crate::scenarios::ScenarioArgs;
 use crate::test_log::{LoggedInputEvent, TestLog};
 use libc::{self, ff_effect, ff_replay, ff_trigger};
 
+//TODO: poll and erase
 pub struct FfXboxGamepad;
 
 impl FfXboxGamepad {

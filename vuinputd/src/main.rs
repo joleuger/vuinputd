@@ -29,6 +29,9 @@ use std::sync::Mutex;
 
 pub mod cuse_device;
 
+use crate::cuse_device::evdev_write_watcher::{
+    initialize_evdev_write_watcher, EVDEV_WRITE_WATCHER,
+};
 use crate::cuse_device::state::{initialize_dedup_last_error, initialize_vuinput_state};
 use crate::cuse_device::vuinput_make_cuse_ops;
 use crate::cuse_device::vuinput_open::VUINPUT_COUNTER;
@@ -194,6 +197,9 @@ fn main() -> std::io::Result<()> {
     vt_tools::check_vt_status();
 
     global_config::initialize_global_config(&args.device_policy, &args.placement, &args.devname);
+    initialize_evdev_write_watcher().expect(
+        "failed to initialize the watcher that watches for writes on the created evdev devices",
+    );
     initialize_vuinput_state();
     VUINPUT_COUNTER.set(AtomicU64::new(3)).expect(
         "failed to initialize the counter that provides the values of the CUSE file handles",
@@ -279,6 +285,8 @@ fn main() -> std::io::Result<()> {
         .lock()
         .unwrap()
         .wait_until_finished();
+
+    EVDEV_WRITE_WATCHER.get().unwrap().lock().unwrap().stop();
 
     Ok(())
 }

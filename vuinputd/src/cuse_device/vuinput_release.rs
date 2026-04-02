@@ -2,12 +2,14 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
+use crate::cuse_device::evdev_write_watcher::EVDEV_WRITE_WATCHER;
 use crate::job_engine::JOB_DISPATCHER;
 use crate::jobs::remove_device_job::RemoveDeviceJob;
 use crate::process_tools::SELF_NAMESPACES;
 use crate::{cuse_device::*, jobs};
 use ::cuse_lowlevel::*;
 use log::debug;
+use std::os::fd::AsFd;
 use std::sync::Arc;
 
 pub unsafe extern "C" fn vuinput_release(
@@ -15,8 +17,8 @@ pub unsafe extern "C" fn vuinput_release(
     _fi: *mut fuse_lowlevel::fuse_file_info,
 ) {
     let fh = &(*_fi).fh;
-    let vuinput_state_mutex =
-        remove_vuinput_state(&VuFileHandle::from_fuse_file_info(_fi.as_ref().unwrap())).unwrap();
+    let vu_fh = VuFileHandle::from_fuse_file_info(_fi.as_ref().unwrap());
+    let vuinput_state_mutex = remove_vuinput_state(&vu_fh).unwrap();
 
     let mut vuinput_state = vuinput_state_mutex.lock().unwrap();
     let input_device = vuinput_state.input_device.take();
@@ -48,6 +50,14 @@ pub unsafe extern "C" fn vuinput_release(
             .dispatch(Box::new(remove_job));
         awaiter(&jobs::remove_device_job::State::Finished);
     }
+
+    EVDEV_WRITE_WATCHER
+        .get()
+        .unwrap()
+        .lock()
+        .unwrap()
+        .remove_device(vuinput_state.file.as_fd())
+        .unwrap();
 
     drop(vuinput_state);
 

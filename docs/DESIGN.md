@@ -397,6 +397,14 @@ When mapping 32-bit compat input_event formats into 64-bit representation, copy 
 
 No high volume of events expected where we could benefit from multiple threads. But much of the code is already prepared for multithreading, if there is really demand.
 
+**Poll / event readiness handling**
+
+- For operations that wait on host device readiness (e.g., force feedback, rumble, vibration, or reading back event state), the CUSE callback must **never block**.  
+- A **poll/wakeup watcher** in a background thread monitors underlying `/dev/uinput` FDs and updates per-handle readiness (`PollState`) in `VuInputState` (see section 3.13).   
+- FUSE poll callbacks may save the provided poll handle and immediately return; the background watcher later invokes `fuse_notify_poll()` to wake the kernel when data arrives.  
+
+*Why:* this separates the fast data-plane (CUSE callbacks) from the asynchronous event-plane (poll watcher) and prevents hanging the filesystem.
+
 ---
 
 ## 3.9 Overriding the type, vendor id, and product id
@@ -621,6 +629,80 @@ The filtering operates on two levels (Defense in Depth):
 * **`strict-gamepad` (Whitelist):** Designed for console-like isolation. It strictly permits only Gamepad/Joystick events (`EV_KEY` buttons, `EV_ABS` axes). It proactively blocks `EV_REL` (mouse movement) and `ABS_MT` (multitouch), effectively "neutering" complex controllers (like DualSense or Wiimotes) so they cannot be used to hijack the host mouse cursor.
 * **`sanitized` (Blacklist):** Designed for desktop gaming. It allows standard Keyboard and Mouse input but strictly filters dangerous keys (`KEY_SYSRQ`, `KEY_POWER`) and host-management shortcuts (VT switching, CAD), providing a safe "sandboxed keyboard."
 
+---
+
+## 3.13 Polling & Readiness Watcher
+
+**Purpose**
+
+- Provide non-blocking detection of device readiness on `/dev/vuinput` for operations like force feedback / rumble / vibration.  
+- Ensure CUSE callbacks (`poll`, `read`) never block and the FUSE filesystem remains responsive.  
+
+**Core design**
+
+- Each `VuInputState` includes a `PollState` struct:
+
+```rust
+#[derive(Debug, Default)]
+pub struct PollState {
+    /// A FUSE poll request is currently waiting to be woken.
+    pub waiting: bool,
+
+    /// Sticky readiness latch: true once evdev became readable, false after read/drain.
+    pub readable: bool,
+}
+```
+
+* A **single background thread** watches all active uinput device file descriptors using **epoll** (or poll).
+* When data arrives:
+
+  * The watcher locks the corresponding `VuInputState` via `VUINPUT_STATE`.
+  * Marks `poll.readable = true`.
+  * If `poll.waiting = true`, the watcher clears the flag and optionally calls `fuse_notify_poll()` to wake any waiting FUSE poll requests.
+
+**Adding / removing devices**
+
+* When creating a new uinput device, the thread performs `epoll_ctl(ADD)` for the file descriptor.
+* On device close, it performs `epoll_ctl(DEL)` to remove the descriptor from monitoring.
+* No separate registry is maintained; the **global `VUINPUT_STATE` HashMap** is the single source of truth.
+
+**Poll callback behavior**
+
+* FUSE poll callbacks **do not block**: they may store the poll handle and immediately return.
+* The background watcher ensures that any pending poll handles are notified asynchronously when data is ready.
+
+**Read handling**
+
+* Reads from `/dev/vuinput` are non-blocking:
+
+  * `poll()` detects readiness.
+  * `read()` uses `O_NONBLOCK` and drains all available events.
+  * `EAGAIN` indicates the buffer is empty, at which point `poll.readable` is reset to false.
+
+**Threading / shutdown**
+
+* The background watcher uses a 500ms epoll_wait timeout to allow clean shutdown.
+* It is safe to have a single watcher thread for all devices; epoll scales efficiently with multiple descriptors.
+
+**Benefits**
+
+* Fully non-blocking CUSE front-end.
+* Lightweight: epoll manages file descriptors; no extra registry is needed.
+* Correctly wakes FUSE poll requests for force feedback / rumble operations.
+* Consistent with existing dispatcher rules: data-plane operations remain fast; control-plane updates scheduled as jobs if needed.
+
+Poll/read race rule:
+`PollState` is the single source of truth for readiness and pending poll waiters.
+Both `poll()` and `read()` must update it only while holding the per-handle `VuInputState` mutex.
+
+- `poll()` must first check `readable`; only if false may it enqueue a poll handle.
+- the watcher sets `readable = true` and atomically drains pending waiters for notification.
+- `read()` may clear `readable` only after draining the proxied evdev fd until `EAGAIN` (or equivalent proof of emptiness).
+
+This prevents lost wakeups and stale readiness in the proxy.
+
+---
+
 ## 4. Security Considerations
 
 `vuinputd` must currently run with **root privileges** to:
@@ -645,6 +727,7 @@ While this design is necessary for mediation, it introduces potential attack sur
 * [ ] Use **seccomp** or `systemd` sandboxing (`ProtectSystem`, `ProtectKernelTunables`, `RestrictNamespaces`, etc.).
 * [ ] Eventually migrate to **Rust-native FUSE/Netlink** bindings to remove unsafe dependencies.
 
+---
 
 ## 5. Background: How are input devices created by the kernel using uinput
 
