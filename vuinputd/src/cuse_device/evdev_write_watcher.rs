@@ -18,7 +18,7 @@ use anyhow::Context;
 use cuse_lowlevel::fuse_lowlevel;
 use nix::sys::epoll::{Epoll, EpollCreateFlags, EpollEvent, EpollFlags};
 
-use crate::cuse_device::state::{get_vuinput_state, VuFileHandle};
+use crate::cuse_device::state::{get_vuinput_state, PollPhase, VuFileHandle};
 
 pub static EVDEV_WRITE_WATCHER: OnceLock<Mutex<EvdevWriteWatcher>> = OnceLock::new();
 
@@ -113,7 +113,7 @@ fn evdev_write_watch_loop(shutdown: Arc<AtomicBool>, epoll: Arc<Epoll>) {
                         fuse_lowlevel::fuse_pollhandle_destroy(handle.as_ptr());
                     }
                 }
-                state.poll.readable = true;
+                state.poll.pollphase = PollPhase::Readable;
                 state.poll.pending.clear();
             }
         }

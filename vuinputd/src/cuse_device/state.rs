@@ -43,6 +43,24 @@ impl KeyTracker {
     }
 }
 
+/// EMPTY -> READY -> READING -> { EMPTY | READY }
+/// EMPTY -> READABLE        (new data arrives / watcher can observe)
+/// READABLE -> READING      (read callback starts draining)
+/// READING -> EMPTY         (read drained everything)
+/// READING -> READABLE      (read finished, but more data still remains)
+#[derive(Debug)]
+pub enum PollPhase {
+    Empty,
+    Readable,
+    Reading,
+}
+
+impl Default for PollPhase {
+    fn default() -> Self {
+        Self::Empty
+    }
+}
+
 /// this data structure ensures poll and read are synchronized.
 /// poll() and read() must synchronize through one shared readines
 /// state, and the state transitions must be done under the same per-handle mutex.
@@ -55,7 +73,7 @@ impl KeyTracker {
 pub struct PollState {
     /// Sticky readiness latch:
     /// true once evdev became readable, false again after read/drain.
-    pub readable: bool,
+    pub pollphase: PollPhase,
 
     /// Pending FUSE poll waiters for this device.
     /// Optimized for the common case of 0 or 1 waiter, but supports
@@ -66,7 +84,7 @@ pub struct PollState {
 impl PollState {
     pub fn new() -> PollState {
         PollState {
-            readable: false,
+            pollphase: PollPhase::Empty,
             pending: smallvec![],
         }
     }

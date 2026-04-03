@@ -38,7 +38,6 @@ pub fn vuinput_make_cuse_ops() -> cuse_lowlevel::cuse_lowlevel_ops {
         release: Some(vuinput_release::vuinput_release),
         fsync: None,
         ioctl: Some(vuinput_ioctl::vuinput_ioctl),
-        //poll: Some(vuinput_poll::vuinput_poll),
-        poll: None,
+        poll: Some(vuinput_poll::vuinput_poll),
     }
 }

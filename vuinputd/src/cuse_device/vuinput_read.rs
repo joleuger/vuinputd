@@ -3,15 +3,12 @@
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
 use crate::cuse_device::*;
-use crate::global_config::get_device_policy;
 use ::cuse_lowlevel::*;
-use libc::{__s32, __u16, input_event};
+use libc::{__s32, __u16, input_event, EAGAIN};
 use libc::{off_t, size_t, EIO};
-use libc::{uinput_abs_setup, uinput_setup};
 use log::{debug, trace};
 use std::io::{Read, Write};
 use std::os::fd::AsRawFd;
-use std::os::raw::c_char;
 use uinput_ioctls::*;
 
 // TODO: compat-mode+ ensure sizeof(struct input_event)
@@ -38,12 +35,12 @@ pub unsafe extern "C" fn vuinput_read(
 
     let mut buffer: [u8; 24] = [0; 24];
 
+    vuinput_state.poll.pollphase = PollPhase::Reading;
     // read up to 24 bytes
-    // todo: non-blocking or timeout
     let result = vuinput_state.file.read(&mut buffer);
     match result {
         Ok(NORMAL_SIZE) => {
-            if (!is_compat) {
+            if !is_compat {
                 let buffer = buffer.as_ptr() as *const i8;
                 fuse_lowlevel::fuse_reply_buf(_req, buffer, 24);
             } else {
@@ -56,18 +53,19 @@ pub unsafe extern "C" fn vuinput_read(
             }
         }
         Err(e) => {
-            debug!("fh {}: error reading from uinput: {e:?}", fh);
-            fuse_lowlevel::fuse_reply_err(_req, EIO);
+            if e.kind() == io::ErrorKind::WouldBlock {
+                // EAGAIN / EWOULDBLOCK
+                //println!("Received EAGAIN: The read would block!");
+                vuinput_state.poll.pollphase = PollPhase::Empty;
+                fuse_lowlevel::fuse_reply_err(_req, EAGAIN);
+            } else {
+                debug!("fh {}: error reading from uinput: {e:?}", fh);
+                fuse_lowlevel::fuse_reply_err(_req, EIO);
+            }
         }
         Ok(_) => {
             debug!("fh {}: error reading from uinput: wrong size", fh);
             fuse_lowlevel::fuse_reply_err(_req, EIO);
         }
     }
-    /*
-        if drained_to_eagain {
-        state.poll.readable = false;
-    } else {
-        state.poll.readable = true;
-    } */
 }
