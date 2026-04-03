@@ -78,7 +78,7 @@ pub trait Device: Sized {
         read_event(event_device_fd)
     }
 
-    /// Emit and read an event with logging
+    /// Emit (to uinput) and read (from evdev) an event with logging
     fn emit_read_and_log(
         &mut self,
         ev_type: u16,
@@ -86,7 +86,20 @@ pub trait Device: Sized {
         val: i32,
     ) -> io::Result<LoggedInputEvent> {
         let event_device_fd = self.get_event_device()?;
-        let event = emit_read_and_log(self.uinput_fd(), event_device_fd, ev_type, code, val)?;
+        let event = emit_read_and_log(self.uinput_fd(), event_device_fd, ev_type, code, val, true)?;
+        self.state_mut().events.push(event.clone());
+        Ok(event)
+    }
+
+    /// Emit and read an event with logging
+    fn emit_to_evdev_read_from_uinput_and_log(
+        &mut self,
+        ev_type: u16,
+        code: u16,
+        val: i32,
+    ) -> io::Result<LoggedInputEvent> {
+        let event_device_fd = self.get_event_device()?;
+        let event = emit_read_and_log(event_device_fd, self.uinput_fd(), ev_type, code, val, false)?;
         self.state_mut().events.push(event.clone());
         Ok(event)
     }
@@ -184,12 +197,17 @@ pub fn emit_read_and_log(
     ev_type: u16,
     code: u16,
     val: i32,
+    emit_syn: bool,
 ) -> io::Result<LoggedInputEvent> {
     let (time_sent_sec, time_sent_nsec) = monotonic_time();
     emit(emit_to, ev_type, code, val)?;
-    emit(emit_to, EV_SYN, SYN_REPORT, 0)?;
+    if emit_syn {
+        emit(emit_to, EV_SYN, SYN_REPORT, 0)?;
+    }
     let input_event_recv = read_event(read_from).unwrap();
-    let _syn_recv = read_event(read_from).unwrap();
+    if emit_syn {
+        let _syn_recv = read_event(read_from).unwrap();
+    }
     let (time_recv_sec, time_recv_nsec) = monotonic_time();
     let duration_usec =
         (time_recv_sec - time_sent_sec) * 1_000_000 + (time_recv_nsec - time_sent_nsec) / 1000;

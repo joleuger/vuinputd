@@ -351,6 +351,7 @@ impl XboxGamepadDevice {
                     }
                     else {
                             println!("event: {} {} {}",input_event.type_,input_event.code,input_event.value);
+                            crate::devices::utils::emit(fd, input_event.type_,input_event.code,input_event.value).unwrap();
                         
                     }
                 } else {

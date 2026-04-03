@@ -46,8 +46,7 @@ pub unsafe extern "C" fn vuinput_open(
     let open_vuinput_result = OpenOptions::new()
         .read(true)
         .write(true)
-        .custom_flags(O_NONBLOCK)
-        .custom_flags(O_CLOEXEC)
+        .custom_flags(O_NONBLOCK | O_CLOEXEC)
         .open(Path::new("/dev/uinput"));
     match open_vuinput_result {
         Ok(v) => {
