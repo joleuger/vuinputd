@@ -2,6 +2,8 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
+use std::sync::atomic::AtomicBool;
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
@@ -38,7 +40,9 @@ impl FfXboxGamepad {
         effect.u = xbox_gamepad::create_rumble_array(0x8000, 0x0);
 
         // ensure uploaded effect gets processed
-        gamepad.read_process_ff_event_from_uinput();
+        let shutdown = Arc::new(AtomicBool::new(false));
+        gamepad.read_process_ff_event_from_uinput(shutdown.clone(),false);
+
         // Upload effect via ioctl
         let effect_id = upload_effect(gamepad.state().event_device_fd, &mut effect)?;
 
@@ -46,12 +50,19 @@ impl FfXboxGamepad {
         thread::sleep(Duration::from_secs(1));
 
         // Play effect (value=1)
-        let _play_effect_event =
-            gamepad.emit_read_and_log(EV_FF, effect_id.try_into().unwrap(), 1)?;
+        let _play_effect_event = gamepad.emit_to_evdev_read_from_uinput_and_log(
+            EV_FF,
+            effect_id.try_into().unwrap(),
+            1,
+        )?;
         thread::sleep(Duration::from_secs(1));
-        let _stop_effect_event =
-            gamepad.emit_read_and_log(EV_FF, effect_id.try_into().unwrap(), 0)?;
+        let _stop_effect_event = gamepad.emit_to_evdev_read_from_uinput_and_log(
+            EV_FF,
+            effect_id.try_into().unwrap(),
+            0,
+        )?;
         thread::sleep(Duration::from_secs(1));
+        shutdown.store(true, std::sync::atomic::Ordering::SeqCst);
 
         let eventlog = TestLog {
             events: gamepad.event_log().to_vec(),

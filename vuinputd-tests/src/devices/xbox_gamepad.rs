@@ -3,9 +3,13 @@
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
 use crate::devices::device_base::{fetch_device_node, open_uinput, Device, DeviceState, BUS_USB};
-use libc::{c_int, close, ff_effect, input_event, open, uinput_ff_upload};
-use nix::{ioctl_write_int, ioctl_write_ptr};
-use std::io;
+use libc::{c_int, close, ff_effect, input_event, open, uinput_ff_upload, EAGAIN};
+use nix::{ioctl_write_int, ioctl_write_ptr, poll::{PollFd, PollFlags, PollTimeout, poll}};
+use std::{
+    io, os::fd::BorrowedFd, sync::{
+        Arc, atomic::{AtomicBool, Ordering}
+    }, thread, time::Duration
+};
 use uinput_ioctls::*;
 
 // Xbox Gamepad codes
@@ -252,7 +256,7 @@ impl Device for XboxGamepadDevice {
         let event_device_fd = unsafe {
             open(
                 event_device_node.as_ptr() as *const i8,
-                libc::O_RDONLY | libc::O_NONBLOCK,
+                libc::O_RDWR | libc::O_NONBLOCK,
             )
         };
         if event_device_fd < 0 {
@@ -284,7 +288,7 @@ impl Device for XboxGamepadDevice {
 }
 
 impl XboxGamepadDevice {
-    pub fn read_process_ff_event_from_uinput(&self) {
+    pub fn read_process_ff_event_from_uinput(&self, shutdown: Arc<AtomicBool>,use_poll:bool) {
         // Copy the i32 file descriptor so we can move it into the thread safely
         let fd = self.state().uinput_fd;
 
@@ -292,39 +296,66 @@ impl XboxGamepadDevice {
             // Buffer for the raw bytes
             let mut buffer = [0u8; 256];
 
-            // Calling C functions always requires an unsafe block
-            let result =
-                unsafe { libc::read(fd, buffer.as_mut_ptr() as *mut libc::c_void, buffer.len()) };
+            let mut pollfds = [
+                PollFd::new(unsafe { BorrowedFd::borrow_raw(fd) }, PollFlags::POLLIN),
+            ];
 
-            // libc::read returns an isize (ssize_t in C)
-            if result < 0 {
-                // result < 0 means an error occurred. We use std::io::Error::last_os_error()
-                // to get the correct OS error message based on the C `errno`.
-                eprintln!(
-                    "Error reading in thread: {}",
-                    std::io::Error::last_os_error()
-                );
-                return;
-            } else if result == 0 {
-                // 0 bytes usually means End-Of-File (EOF) or that the device was closed
-                println!("0 bytes (EOF) - Terminating thread");
-                return;
-            } else if result == 24 {
-                println!("read_process_ff_event_from_uinput: processing input event (read)");
-                let input_event = buffer.as_ptr() as *const libc::input_event;
-                let input_event = unsafe { *input_event };
-                if input_event.type_ == EV_UINPUT && input_event.code == UI_FF_UPLOAD {
-                    let mut upload: uinput_ff_upload = unsafe { std::mem::zeroed() };
-                    upload.request_id = input_event.value.try_into().unwrap();
-                    unsafe {
-                        let ptr = &mut upload as *mut uinput_ff_upload;
-                        ui_begin_ff_upload(fd, ptr).unwrap();
-                        println!("effect type: {}", upload.effect.type_);
-                        ui_end_ff_upload(fd, ptr).unwrap();
-                    };
+
+            loop {
+                if shutdown.load(Ordering::SeqCst) {
+                    break;
                 }
-            } else {
-                println!("Read {} bytes", result);
+                println!("Loop in read_process_ff_event_from_uinput");
+
+                if use_poll {
+                    let _ = poll(&mut pollfds, 500u16);
+                } else {
+                    thread::sleep(Duration::from_millis(200));
+                }
+
+                // Calling C functions always requires an unsafe block
+                let result = unsafe {
+                    libc::read(fd, buffer.as_mut_ptr() as *mut libc::c_void, buffer.len())
+                };
+                if result < 0 {
+                    // result < 0 means an error occurred. We use std::io::Error::last_os_error()
+                    // to get the correct OS error message based on the C `errno`.
+                    let error = std::io::Error::last_os_error();
+                    match error.kind() {
+                        io::ErrorKind::WouldBlock => {
+                            eprintln!("a read would block. waiting for the next real event");
+                            continue;
+                        }
+                        _ => {
+                            eprintln!("Error reading in thread: {}", error);
+                            return;
+                        }
+                    }
+                } else if result == 0 {
+                    // 0 bytes usually means End-Of-File (EOF) or that the device was closed
+                    println!("0 bytes (EOF) - Terminating thread");
+                    return;
+                } else if result == 24 {
+                    println!("read_process_ff_event_from_uinput: processing input event (read)");
+                    let input_event = buffer.as_ptr() as *const libc::input_event;
+                    let input_event = unsafe { *input_event };
+                    if input_event.type_ == EV_UINPUT && input_event.code == UI_FF_UPLOAD {
+                        let mut upload: uinput_ff_upload = unsafe { std::mem::zeroed() };
+                        upload.request_id = input_event.value.try_into().unwrap();
+                        unsafe {
+                            let ptr = &mut upload as *mut uinput_ff_upload;
+                            ui_begin_ff_upload(fd, ptr).unwrap();
+                            println!("effect type: {}", upload.effect.type_);
+                            ui_end_ff_upload(fd, ptr).unwrap();
+                        };
+                    }
+                    else {
+                            println!("event: {} {} {}",input_event.type_,input_event.code,input_event.value);
+                        
+                    }
+                } else {
+                    println!("Read {} bytes", result);
+                }
             }
         });
     }

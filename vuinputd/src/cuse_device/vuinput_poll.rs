@@ -25,6 +25,8 @@ pub unsafe extern "C" fn vuinput_poll(
         get_vuinput_state(&VuFileHandle::from_fuse_file_info(fi.as_ref().unwrap())).unwrap();
     let mut vuinput_state = vuinput_state_mutex.lock().unwrap();
 
+    debug!("poll");
+
     match vuinput_state.poll.pollphase {
         PollPhase::Empty => {
             let ph = NonNull::<fuse_lowlevel::fuse_pollhandle>::new(ph);

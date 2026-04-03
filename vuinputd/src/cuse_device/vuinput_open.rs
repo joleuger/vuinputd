@@ -42,7 +42,7 @@ pub unsafe extern "C" fn vuinput_open(
     debug!("fh {}: namespaces {}", fh, requesting_process);
     // namespaces net:4026531840, uts:4026531838, ipc:4026531839, pid:4026531836, pid_for_children:4026531836, user:4026531837, mnt:4026531841, cgroup:4026531835, time:4026531834, time_for_children:4026531834
     (*_fi).fh = fh;
-    // Open the path in read-only mode, returns `io::Result<File>`
+    // Open the path, returns `io::Result<File>`
     let open_vuinput_result = OpenOptions::new()
         .read(true)
         .write(true)
@@ -52,7 +52,6 @@ pub unsafe extern "C" fn vuinput_open(
     match open_vuinput_result {
         Ok(v) => {
             let vu_fh: VuFileHandle = VuFileHandle::Fh(fh);
-            let uinput_fd: std::os::unix::prelude::BorrowedFd<'_> = v.as_fd();
             insert_vuinput_state(
                 &vu_fh,
                 VuInputState {
