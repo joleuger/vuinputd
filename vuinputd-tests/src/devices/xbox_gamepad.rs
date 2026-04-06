@@ -2,13 +2,24 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
-use crate::devices::device_base::{fetch_device_node, open_uinput, Device, DeviceState, BUS_USB};
+use crate::devices::{
+    device_base::{fetch_device_node, open_uinput, Device, DeviceState, BUS_USB},
+    utils::{ABS_HAT0X, ABS_HAT0Y, ABS_RX, ABS_RY, ABS_RZ, ABS_X, ABS_Y, ABS_Z},
+};
 use libc::{c_int, close, ff_effect, input_event, open, uinput_ff_upload, EAGAIN};
-use nix::{ioctl_write_int, ioctl_write_ptr, poll::{PollFd, PollFlags, PollTimeout, poll}};
+use nix::{
+    ioctl_write_int, ioctl_write_ptr,
+    poll::{poll, PollFd, PollFlags, PollTimeout},
+};
 use std::{
-    io, os::fd::BorrowedFd, sync::{
-        Arc, atomic::{AtomicBool, Ordering}
-    }, thread, time::Duration
+    io,
+    os::fd::BorrowedFd,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc,
+    },
+    thread,
+    time::Duration,
 };
 use uinput_ioctls::*;
 
@@ -27,16 +38,6 @@ pub const BTN_START: u16 = 0x13b;
 pub const BTN_MODE: u16 = 0x13c;
 pub const BTN_THUMBL: u16 = 0x13d;
 pub const BTN_THUMBR: u16 = 0x13e;
-
-// Absolute Axes
-pub const ABS_X: u16 = 0x00;
-pub const ABS_Y: u16 = 0x01;
-pub const ABS_Z: u16 = 0x02;
-pub const ABS_RX: u16 = 0x03;
-pub const ABS_RY: u16 = 0x04;
-pub const ABS_RZ: u16 = 0x05;
-pub const ABS_HAT0X: u16 = 0x10;
-pub const ABS_HAT0Y: u16 = 0x11;
 
 // Force Feedback
 // https://github.com/torvalds/linux/blob/master/include/uapi/linux/input.h
@@ -288,7 +289,7 @@ impl Device for XboxGamepadDevice {
 }
 
 impl XboxGamepadDevice {
-    pub fn read_process_ff_event_from_uinput(&self, shutdown: Arc<AtomicBool>,use_poll:bool) {
+    pub fn read_process_ff_event_from_uinput(&self, shutdown: Arc<AtomicBool>, use_poll: bool) {
         // Copy the i32 file descriptor so we can move it into the thread safely
         let fd = self.state().uinput_fd;
 
@@ -296,10 +297,10 @@ impl XboxGamepadDevice {
             // Buffer for the raw bytes
             let mut buffer = [0u8; 256];
 
-            let mut pollfds = [
-                PollFd::new(unsafe { BorrowedFd::borrow_raw(fd) }, PollFlags::POLLIN),
-            ];
-
+            let mut pollfds = [PollFd::new(
+                unsafe { BorrowedFd::borrow_raw(fd) },
+                PollFlags::POLLIN,
+            )];
 
             loop {
                 if shutdown.load(Ordering::SeqCst) {
@@ -348,11 +349,12 @@ impl XboxGamepadDevice {
                             println!("effect type: {}", upload.effect.type_);
                             ui_end_ff_upload(fd, ptr).unwrap();
                         };
-                    }
-                    else {
-                            println!("event: {} {} {}",input_event.type_,input_event.code,input_event.value);
-                            crate::devices::utils::emit(fd, input_event.type_,input_event.code,input_event.value).unwrap();
-                        
+                    } else {
+                        println!(
+                            "event: {} {} {}",
+                            input_event.type_, input_event.code, input_event.value
+                        );
+                        //crate::devices::utils::emit(fd, input_event.type_,input_event.code,input_event.value).unwrap();
                     }
                 } else {
                     println!("Read {} bytes", result);

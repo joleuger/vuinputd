@@ -5,10 +5,7 @@
 use clap::{Parser, Subcommand};
 use vuinputd_tests::scenarios::{
     basic_keyboard::BasicKeyboard, basic_mouse::BasicMouse, basic_ps4_gamepad::BasicPs4Gamepad,
-    basic_xbox_gamepad::BasicXboxGamepad,
-    ff_xbox_gamepad::FfXboxGamepad, /*
-                                    reuse_keyboard::ReuseKeyboard, reuse_xbox_gamepad::ReuseXboxGamepad,
-                                    ScenarioArgs, stress_keyboard::StressKeyboard, stress_xbox_gamepad::StressXboxGamepad, */
+    basic_xbox_gamepad::BasicXboxGamepad, ff_xbox_gamepad::FfXboxGamepad, BasicMouseAbsolute,
     ScenarioArgs,
 };
 
@@ -35,6 +32,9 @@ enum Commands {
 
     /// Basic mouse test
     BasicMouse,
+
+    /// Basic mouse (absolute) test
+    BasicMouseAbsolute,
 
     /// Basic PS4 gamepad test
     BasicPs4Gamepad,
@@ -70,6 +70,7 @@ fn main() -> Result<(), std::io::Error> {
     match cli.command {
         Commands::BasicKeyboard => BasicKeyboard::run(&args),
         Commands::BasicMouse => BasicMouse::run(&args),
+        Commands::BasicMouseAbsolute => BasicMouseAbsolute::run(&args),
         Commands::BasicPs4Gamepad => BasicPs4Gamepad::run(&args),
         Commands::BasicXboxGamepad => BasicXboxGamepad::run(&args),
         Commands::FfXboxGamepad => FfXboxGamepad::run(&args),

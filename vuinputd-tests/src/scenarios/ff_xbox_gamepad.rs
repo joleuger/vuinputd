@@ -41,7 +41,7 @@ impl FfXboxGamepad {
 
         // ensure uploaded effect gets processed
         let shutdown = Arc::new(AtomicBool::new(false));
-        gamepad.read_process_ff_event_from_uinput(shutdown.clone(),false);
+        gamepad.read_process_ff_event_from_uinput(shutdown.clone(), false);
 
         // Upload effect via ioctl
         let effect_id = upload_effect(gamepad.state().event_device_fd, &mut effect)?;

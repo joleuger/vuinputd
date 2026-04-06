@@ -23,6 +23,16 @@ pub const SYN_REPORT: u16 = 0;
 pub const BUS_USB: u16 = 0x03;
 pub const SYS_INPUT_DIR: &str = "/sys/devices/virtual/input/";
 
+// Absolute Axes
+pub const ABS_X: u16 = 0x00;
+pub const ABS_Y: u16 = 0x01;
+pub const ABS_Z: u16 = 0x02;
+pub const ABS_RX: u16 = 0x03;
+pub const ABS_RY: u16 = 0x04;
+pub const ABS_RZ: u16 = 0x05;
+pub const ABS_HAT0X: u16 = 0x10;
+pub const ABS_HAT0Y: u16 = 0x11;
+
 /// Struct holding device state
 pub struct DeviceState {
     pub uinput_fd: i32,
@@ -99,7 +109,8 @@ pub trait Device: Sized {
         val: i32,
     ) -> io::Result<LoggedInputEvent> {
         let event_device_fd = self.get_event_device()?;
-        let event = emit_read_and_log(event_device_fd, self.uinput_fd(), ev_type, code, val, false)?;
+        let event =
+            emit_read_and_log(event_device_fd, self.uinput_fd(), ev_type, code, val, false)?;
         self.state_mut().events.push(event.clone());
         Ok(event)
     }
