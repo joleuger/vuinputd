@@ -16,7 +16,7 @@ mkdir -p /run/vuinputd/vuinput-test/udev
 Install bubblewrap:
 `apt-get install bubblewrap`.
 
-Run with `cargo test -p vuinputd-tests --features "requires-privileges requires-uinput requires-bwrap"`.
+Run with `cargo test -p vuinputd-tests --features "requires-privileges requires-uinput requires-bwrap" -- --test-threads=1`.
 
 ### With podman
 
@@ -29,7 +29,7 @@ cargo build -p vuinputd-tests
 podman build --dns 1.1.1.1 -t vuinputd-tests -f vuinputd-tests/podman/Containerfile .
 ```
 
-Run with `cargo test -p vuinputd-tests --features "requires-privileges requires-uinput requires-podman"`.
+Run with `cargo test -p vuinputd-tests --features "requires-privileges requires-uinput requires-podman -- --test-threads=1"`.
 
 ## Performance tests
 

@@ -99,18 +99,14 @@ fn test_keyboard_on_host() {
 fn test_keyboard_in_container_with_uinput() {
     let test_keyboard = env!("CARGO_BIN_EXE_test-keyboard");
 
-    let (builder, _ipc) = bwrap::BwrapBuilder::new()
+    let out = bwrap::BwrapBuilder::new()
         .unshare_net()
         .ro_bind("/", "/")
         .tmpfs("/tmp")
         .dev_bind("/dev/uinput", "/dev/uinput")
         .dev_bind("/dev/input", "/dev/input")
         .die_with_parent()
-        .with_ipc()
-        .expect("failed to create IPC");
-
-    let out = builder
-        .command(test_keyboard, &["--ipc"])
+        .command(test_keyboard, &[])
         .run()
         .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
 
@@ -132,7 +128,7 @@ fn test_keyboard_in_container_with_vuinput_placement_in_container() {
 
     let test_keyboard = env!("CARGO_BIN_EXE_test-keyboard");
 
-    let (builder, _ipc) = bwrap::BwrapBuilder::new()
+    let out = bwrap::BwrapBuilder::new()
         .unshare_net()
         .ro_bind("/", "/")
         .tmpfs("/tmp")
@@ -142,11 +138,7 @@ fn test_keyboard_in_container_with_vuinput_placement_in_container() {
         .tmpfs("/run")
         .dev_bind("/dev/vuinput-test", "/dev/uinput")
         .die_with_parent()
-        .with_ipc()
-        .expect("failed to create IPC");
-
-    let out = builder
-        .command(test_keyboard, &["--ipc"])
+        .command(test_keyboard, &[])
         .run()
         .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
 
@@ -168,7 +160,7 @@ fn test_keyboard_in_container_with_vuinput_placement_on_host() {
 
     let test_keyboard = env!("CARGO_BIN_EXE_test-keyboard");
 
-    let (builder, _ipc) = bwrap::BwrapBuilder::new()
+    let out = bwrap::BwrapBuilder::new()
         .unshare_net()
         .ro_bind("/", "/")
         .tmpfs("/tmp")
@@ -179,11 +171,7 @@ fn test_keyboard_in_container_with_vuinput_placement_on_host() {
         .bind("/run/vuinputd/vuinput-test/udev", "/run/udev")
         .dev_bind("/dev/vuinput-test", "/dev/uinput")
         .die_with_parent()
-        .with_ipc()
-        .expect("failed to create IPC");
-
-    let out = builder
-        .command(test_keyboard, &["--ipc"])
+        .command(test_keyboard, &[])
         .run()
         .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
 
@@ -194,7 +182,6 @@ fn test_keyboard_in_container_with_vuinput_placement_on_host() {
     assert!(out.status.success());
 }
 
-#[ignore = "not implemented yet"]
 #[cfg(all(
     feature = "requires-privileges",
     feature = "requires-uinput",
@@ -206,7 +193,7 @@ fn test_gamepad_with_ff_in_container() {
 
     let test_scenarios = env!("CARGO_BIN_EXE_test-scenarios");
 
-    let (builder, _ipc) = bwrap::BwrapBuilder::new()
+    let out = bwrap::BwrapBuilder::new()
         .unshare_net()
         .ro_bind("/", "/")
         .tmpfs("/tmp")
@@ -215,12 +202,7 @@ fn test_gamepad_with_ff_in_container() {
         // run needs to be writable for the udev devices
         .tmpfs("/run")
         .dev_bind("/dev/vuinput-test", "/dev/uinput")
-        .die_with_parent()
-        .with_ipc()
-        .expect("failed to create IPC");
-
-    let out = builder
-        .command(test_scenarios, &["--ipc", "ff-xbox-gamepad"])
+        .command(test_scenarios, &["ff-xbox-gamepad"])
         .run()
         .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
 
@@ -230,7 +212,7 @@ fn test_gamepad_with_ff_in_container() {
 
     assert!(out.status.success());
 }
-#[ignore = "not implemented yet"]
+
 #[cfg(all(
     feature = "requires-privileges",
     feature = "requires-uinput",
@@ -242,7 +224,7 @@ fn test_mouse_absolute_in_container() {
 
     let test_scenarios = env!("CARGO_BIN_EXE_test-scenarios");
 
-    let (builder, _ipc) = bwrap::BwrapBuilder::new()
+    let out = bwrap::BwrapBuilder::new()
         .unshare_net()
         .ro_bind("/", "/")
         .tmpfs("/tmp")
@@ -252,11 +234,7 @@ fn test_mouse_absolute_in_container() {
         .tmpfs("/run")
         .dev_bind("/dev/vuinput-test", "/dev/uinput")
         .die_with_parent()
-        .with_ipc()
-        .expect("failed to create IPC");
-
-    let out = builder
-        .command(test_scenarios, &["--ipc", "basic-mouse-absolute"])
+        .command(test_scenarios, &["basic-mouse-absolute"])
         .run()
         .unwrap_or_else(|e| panic!("failed to run bwrap!: {e}"));
 
