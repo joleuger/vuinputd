@@ -3,7 +3,7 @@
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
 use ::cuse_lowlevel::*;
-use libc::{iovec, size_t, EBADRQC};
+use libc::{EBADRQC, input_absinfo, iovec, size_t};
 use libc::{uinput_abs_setup, uinput_ff_erase, uinput_ff_upload, uinput_setup};
 use log::debug;
 use std::ffi::CStr;
@@ -275,6 +275,10 @@ pub unsafe extern "C" fn vuinput_ioctl(
             //todo: i guess this needs to be reworked as this is variable size. i guess it is not reachable at all
             debug!("fh {}: ioctl UI_ABS_SETUP", fh);
             assert!(_in_bufsz != 0, "should have _in_bufsz");
+
+            let abs_setup_ptr = _in_buf as *const uinput_abs_setup;
+            ui_abs_setup(fd, abs_setup_ptr).unwrap();
+
             fuse_lowlevel::fuse_reply_ioctl(_req, 0, std::ptr::null(), 0);
         }
         UI_GET_SYSNAME_WITHOUT_SIZE => {
