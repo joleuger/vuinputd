@@ -71,6 +71,7 @@ impl Drop for VuinputdGuard {
         // Wait a bit
         for _ in 0..10 {
             if let Ok(Some(_)) = self.child.try_wait() {
+                println!("vuinputd for tests shutdown gracefully");
                 return;
             }
             thread::sleep(Duration::from_millis(100));
@@ -79,5 +80,6 @@ impl Drop for VuinputdGuard {
         // Still alive → SIGKILL
         let _ = signal::kill(pid, Signal::SIGKILL);
         let _ = self.child.wait();
+        println!("vuinputd for tests killed");
     }
 }

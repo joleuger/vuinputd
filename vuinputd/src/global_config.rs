@@ -10,6 +10,7 @@ pub struct GlobalConfig {
     pub policy: DevicePolicy,
     pub placement: Placement,
     pub vudevname: String,
+    pub device_owner: DeviceOwner,
 }
 
 // The actual static variable. It starts empty and is set once in main().
@@ -41,16 +42,40 @@ pub enum Placement {
     None,
 }
 
+/// Device owner of the created devices
+#[derive(Debug, Clone, ValueEnum, Default, PartialEq, Eq)]
+pub enum DeviceOwner {
+    #[default]
+    /// Automatically derive useful settings (how might change in the future)
+    Auto,
+    /// Use the uid and gid of vuinputd
+    Vuinputd,
+    /// Same as dev folder in container
+    ContainerDevFolder,
+}
+
+impl DeviceOwner {
+    pub fn to_string_rep(&self) -> String {
+        match self {
+            DeviceOwner::Auto => "auto".to_string(),
+            DeviceOwner::Vuinputd => "vuinputd".to_string(),
+            DeviceOwner::ContainerDevFolder => "container-dev-folder".to_string(),
+        }
+    }
+}
+
 pub fn initialize_global_config(
     device_policy: &DevicePolicy,
     placement: &Placement,
     devname: &Option<String>,
+    device_owner: &DeviceOwner,
 ) {
     if CONFIG
         .set(GlobalConfig {
             policy: device_policy.clone(),
             placement: placement.clone(),
             vudevname: devname.clone().unwrap_or("vuinput".to_string()),
+            device_owner: device_owner.clone(),
         })
         .is_err()
     {
@@ -69,4 +94,8 @@ pub fn get_placement<'a>() -> &'a Placement {
 
 pub fn get_vudevname<'a>() -> &'a String {
     &CONFIG.get().unwrap().vudevname
+}
+
+pub fn get_device_owner<'a>() -> &'a DeviceOwner {
+    &CONFIG.get().unwrap().device_owner
 }

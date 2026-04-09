@@ -35,7 +35,7 @@ use crate::cuse_device::evdev_write_watcher::{
 use crate::cuse_device::state::{initialize_dedup_last_error, initialize_vuinput_state};
 use crate::cuse_device::vuinput_make_cuse_ops;
 use crate::cuse_device::vuinput_open::VUINPUT_COUNTER;
-use crate::global_config::{DevicePolicy, Placement};
+use crate::global_config::{DeviceOwner, DevicePolicy, Placement};
 use crate::input_realizer::host_fs;
 use crate::jobs::monitor_udev_job::MonitorBackgroundLoop;
 
@@ -80,13 +80,13 @@ struct Args {
     #[arg(long = "action-base64", value_name = "BASE64")]
     pub action_base64: Option<String>,
 
-    /// Path to the target process's /proc/<pid>/ns directory used as namespace source.
+    /// Process id that is used as the namespace source (e.g. 1234 is used to read the namespaces from /proc/1234/ns).
     #[arg(
-        long = "target-namespace",
-        value_name = "NS_PATH",
-        help = "Path to /proc/<pid>/ns used as the namespace source (e.g. /proc/1234/ns or /proc/self/ns)"
+        long = "target-pid",
+        value_name = "PID",
+        help = "Process id that is used as the namespace source (e.g. 1234 is used to read the namespaces from /proc/1234/ns)."
     )]
-    pub target_namespace: Option<String>,
+    pub target_pid: Option<String>,
 
     #[arg(
         long = "vt-guard",
@@ -104,6 +104,10 @@ struct Args {
     /// Placement of device nodes and udev data
     #[arg(long, value_enum, default_value_t)]
     pub placement: Placement,
+
+    /// Owner of the created devices
+    #[arg(long = "device-owner", value_enum, default_value_t)]
+    pub device_owner: DeviceOwner,
 }
 
 fn validate_args(args: &Args) -> Result<(), String> {
@@ -116,18 +120,18 @@ fn validate_args(args: &Args) -> Result<(), String> {
         }
     };
 
-    // action might only occur with target-namespace
+    // action might only occur with target-pid
     match (
         &args.major,
         &args.minor,
         &args.devname,
         action,
-        &args.target_namespace,
+        &args.target_pid,
     ) {
         (None, None, None, Some(_), _) => {}
         (_, _, _, None, None) => {}
         _ => {
-            return Err("--action or --action-base64 must not be used in combination with any other argument other than target-namespace".into());
+            return Err("--action or --action-base64 must not be used in combination with any other argument other than target-pid".into());
         }
     }
 
@@ -181,8 +185,8 @@ fn main() -> std::io::Result<()> {
     };
 
     if action.is_some() {
-        if let Some(target_namespace) = args.target_namespace {
-            process_tools::run_in_net_and_mnt_namespace(target_namespace.as_str()).unwrap();
+        if let Some(target_pid) = args.target_pid {
+            process_tools::run_in_net_and_mnt_namespace(target_pid.as_str(),&args.device_owner).unwrap();
         }
         let error_code = actions::handle_action::handle_cli_action(action.unwrap());
         std::process::exit(error_code);
@@ -196,7 +200,12 @@ fn main() -> std::io::Result<()> {
     check_permissions().expect("failed to read the capabilities of the vuinputd process");
     vt_tools::check_vt_status();
 
-    global_config::initialize_global_config(&args.device_policy, &args.placement, &args.devname);
+    global_config::initialize_global_config(
+        &args.device_policy,
+        &args.placement,
+        &args.devname,
+        &args.device_owner,
+    );
     initialize_evdev_write_watcher().expect(
         "failed to initialize the watcher that watches for writes on the created evdev devices",
     );
@@ -208,7 +217,7 @@ fn main() -> std::io::Result<()> {
         .set(Mutex::new(Dispatcher::new()))
         .expect("failed to initialize the job dispatcher");
     SELF_NAMESPACES
-        .set(get_namespace(Pid::SelfPid))
+        .set(get_self_namespace())
         .expect("failed to retrieve the namespaces of the vuinputd process");
     initialize_dedup_last_error();
     JOB_DISPATCHER

@@ -11,7 +11,7 @@ use std::{
     io::Read,
     os::{
         fd::{AsRawFd, FromRawFd, OwnedFd, RawFd},
-        unix::process::CommandExt,
+        unix::{fs::MetadataExt, process::CommandExt},
     },
     path::Path,
     process::Command,
@@ -21,23 +21,34 @@ use std::{
 use anyhow::anyhow;
 use std::io;
 
-use crate::actions::action::Action;
+use crate::{
+    actions::action::Action,
+    global_config::{get_device_owner, DeviceOwner},
+};
+
+pub mod ns_fscreds;
 
 pub static SELF_NAMESPACES: OnceLock<Namespaces> = OnceLock::new();
 
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 pub enum Pid {
-    SelfPid,
     Pid(u32),
 }
 
 impl Pid {
     pub fn path(&self) -> String {
         match self {
-            Pid::SelfPid => "/proc/self".to_string(),
             Pid::Pid(pid_no) => format!("/proc/{}", pid_no),
         }
     }
+    pub fn to_string_rep(&self) -> String {
+        let Pid::Pid(val) = self;
+        val.to_string()
+    }
+}
+enum PidOrSelf {
+    Pid(u32),
+    SelfPid,
 }
 
 #[derive(Debug, Default, Clone, Eq, PartialEq, Hash)]
@@ -80,15 +91,13 @@ pub fn is_compat_process(pid: Pid) -> Option<bool> {
                 Err(_) => None,
             }
         }
-        Pid::SelfPid => unreachable!(),
     }
 }
 
-// TODO: Rename to capture all relevant process information
-#[derive(Debug, Default, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Clone, Eq, PartialEq, Hash)]
 pub struct RequestingProcess {
-    pub nspath: String,
-    pub nsroot: String,
+    pub pid_requestor: Pid,
+    pub pid_requestor_root: Pid,
     pub namespaces: Namespaces,
     pub is_compat: bool,
 }
@@ -134,10 +143,19 @@ impl std::fmt::Display for RequestingProcess {
     }
 }
 
+pub fn get_self_namespace() -> Namespaces {
+    get_namespace_of_pid_or_self(PidOrSelf::SelfPid)
+}
+
 pub fn get_namespace(pid: Pid) -> Namespaces {
-    let pid: String = match pid {
-        Pid::Pid(pid) => pid.to_string(),
-        Pid::SelfPid => "self".to_string(),
+    let Pid::Pid(pid) = pid;
+    get_namespace_of_pid_or_self(PidOrSelf::Pid(pid))
+}
+
+fn get_namespace_of_pid_or_self(pid_or_self: PidOrSelf) -> Namespaces {
+    let pid: String = match pid_or_self {
+        PidOrSelf::Pid(pid) => pid.to_string(),
+        PidOrSelf::SelfPid => "self".to_string(),
     };
     let nspath = format!("/proc/{}/ns", pid);
 
@@ -181,7 +199,6 @@ pub fn get_namespace(pid: Pid) -> Namespaces {
 
 fn get_ppid(pid: Pid) -> Option<Pid> {
     let content = match pid {
-        Pid::SelfPid => fs::read_to_string(format!("/proc/self/status")).ok()?,
         Pid::Pid(pid) => fs::read_to_string(format!("/proc/{}/status", pid)).ok()?,
     };
     let ppid = content
@@ -239,29 +256,26 @@ pub fn get_requesting_process(pid: Pid) -> RequestingProcess {
                 pid.path()
             );
 
-            let nspath = format!("{}/ns", pid.path());
-            let nsroot = format!("{}/ns", ppid.path());
             RequestingProcess {
-                nspath: nspath,
-                nsroot: nsroot,
+                pid_requestor: pid,
+                pid_requestor_root: ppid,
                 namespaces: nsinodes,
                 is_compat: is_compat,
             }
-        }
-        Pid::SelfPid => {
-            unreachable!();
         }
     }
 }
 
 fn print_debug_string(action: &str, ns: &RequestingProcess) {
-    let action_base64 = (BASE64_STANDARD.encode(action));
+    let action_base64 = BASE64_STANDARD.encode(action);
     let mut debugstring = String::new();
     debugstring.push_str("In case you need to debug the system calls, call `strace vuinputd");
-    debugstring.push_str(" --target-namespace ");
-    debugstring.push_str(ns.nsroot.as_str());
+    debugstring.push_str(" --target-pid ");
+    debugstring.push_str(&ns.pid_requestor_root.to_string_rep());
     debugstring.push_str(" --action-base64 ");
     debugstring.push_str(action_base64.as_str());
+    debugstring.push_str(" --device-owner ");
+    debugstring.push_str(get_device_owner().to_string_rep().as_str());
     debugstring.push_str("`");
     debug!("{}", debugstring);
 }
@@ -272,13 +286,17 @@ pub fn start_action(action: Action, ns: &RequestingProcess) -> anyhow::Result<u3
     let action_json = serde_json::to_string(&action).unwrap();
     print_debug_string(&action_json, &ns);
 
+    let device_owner = get_device_owner().to_string_rep();
+
     let child = unsafe {
         Command::new("/proc/self/exe")
             .args([
                 "--action",
                 action_json.as_str(),
-                "--target-namespace",
-                ns.nsroot.as_str(),
+                "--target-pid",
+                ns.pid_requestor_root.to_string_rep().as_str(),
+                "--device-owner",
+                device_owner.as_str(),
             ])
             .pre_exec(|| {
                 // Last resort, if the parent just is killed.
@@ -292,24 +310,40 @@ pub fn start_action(action: Action, ns: &RequestingProcess) -> anyhow::Result<u3
     Result::Ok(child.id())
 }
 
-pub fn run_in_net_and_mnt_namespace(target_namespace: &str) -> anyhow::Result<()> {
+pub fn run_in_net_and_mnt_namespace(target_pid: &str, device_owner: &DeviceOwner) -> anyhow::Result<()> {
     debug!(
         "Entering namespaces of process {}. We assume this is the root process of the container.",
-        target_namespace
+        target_pid
     );
 
-    let path: &Path = Path::new(target_namespace);
+    let fs_uid_gid = if *device_owner == DeviceOwner::ContainerDevFolder {
+        let pid:u32 = target_pid.trim().parse()?;
+        let pid = Pid::Pid(pid);
+        let fs_uid=ns_fscreds::get_uid_in_container(pid, 0)?;
+        let fs_gid=ns_fscreds::get_gid_in_container(pid, 0)?;
+        Some((fs_uid,fs_gid))
+    } else {
+        None
+    };
+
+    let nspath = format!("/proc/{}/ns", target_pid);
+    let path: &Path = Path::new(&nspath);
     if !fs::exists(path).unwrap() {
         return Err(anyhow!("the root process of the container whose namespaces we want to enter does not exist anymore"));
     }
-    let net = File::open(target_namespace.to_string() + "/net")?;
-    let mnt = File::open(target_namespace.to_string() + "/mnt")?;
+    let net = File::open(nspath.to_string() + "/net")?;
+    let mnt = File::open(nspath.to_string() + "/mnt")?;
 
     unsafe {
         // enter namespaces
         libc::setns(net.as_raw_fd(), libc::CLONE_NEWNET);
         libc::setns(mnt.as_raw_fd(), libc::CLONE_NEWNS);
     };
+
+    if let Some((fs_uid,fs_gid)) = fs_uid_gid {
+        ns_fscreds::acquire_uid_and_gid(fs_uid, fs_gid)?;
+    }
+
     anyhow::Ok(())
 }
 
@@ -337,9 +371,6 @@ pub async fn await_process(pid: Pid) -> io::Result<i32> {
 
                 Ok(si.si_status())
             }
-        }
-        Pid::SelfPid => {
-            unreachable!();
         }
     }
 }

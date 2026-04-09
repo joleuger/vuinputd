@@ -107,6 +107,18 @@ impl PodmanBuilder {
         self
     }
 
+    pub fn userns(mut self, mode: &str) -> Self {
+        self.args.push("--userns".into());
+        self.args.push(mode.into());
+        self
+    }
+
+    pub fn uidmap(mut self, uidmap: &str) -> Self {
+        self.args.push("--uidmap".into());
+        self.args.push(uidmap.into());
+        self
+    }
+
     /// Enable bidirectional IPC using a Unix seqpacket socketpair.
     pub fn with_ipc(mut self) -> io::Result<(Self, SandboxIpc)> {
         let (parent, child) = nix::sys::socket::socketpair(
