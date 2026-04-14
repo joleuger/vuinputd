@@ -24,19 +24,20 @@ use base64::Engine as _;
 use log::info;
 use std::ffi::CString;
 use std::os::raw::c_char;
+use std::path::PathBuf;
 use std::sync::atomic::AtomicU64;
 use std::sync::Mutex;
 
 pub mod cuse_device;
 
+use crate::container_runtime::ContainerRuntime;
 use crate::cuse_device::evdev_write_watcher::{
     initialize_evdev_write_watcher, EVDEV_WRITE_WATCHER,
 };
 use crate::cuse_device::state::{initialize_dedup_last_error, initialize_vuinput_state};
 use crate::cuse_device::vuinput_make_cuse_ops;
 use crate::cuse_device::vuinput_open::VUINPUT_COUNTER;
-use crate::global_config::{DeviceOwner, DevicePolicy, Placement};
-use crate::input_realizer::host_fs;
+use crate::global_config::{DeviceOwner, DevicePolicy, Placement, Scope};
 use crate::jobs::monitor_udev_job::MonitorBackgroundLoop;
 
 pub mod process_tools;
@@ -48,6 +49,7 @@ use crate::process_tools::*;
 pub mod actions;
 pub mod input_realizer;
 
+pub mod container_runtime;
 pub mod global_config;
 pub mod jobs;
 pub mod vt_tools;
@@ -101,59 +103,100 @@ struct Args {
     #[arg(long, value_enum, default_value_t)]
     device_policy: DevicePolicy,
 
-    /// Placement of device nodes and udev data
-    #[arg(long, value_enum, default_value_t)]
-    pub placement: Placement,
+    /// [DEPRECATED] Placement of device nodes and udev data. Maps to --container-runtime. Will be removed in a future version.
+    #[arg(long, value_enum)]
+    pub placement: Option<Placement>,
 
     /// Owner of the created devices
     #[arg(long = "device-owner", value_enum, default_value_t)]
     pub device_owner: DeviceOwner,
+
+    /// Container runtime used for name resolution and lifecycle events
+    #[arg(long, default_value_t = ContainerRuntime::Auto, value_enum)]
+    pub container_runtime: ContainerRuntime,
+
+    /// Path to a custom strategy configuration file (used when runtime is 'custom-engine')
+    #[arg(long)]
+    pub strategy_file: Option<PathBuf>,
+
+    /// Bind to a single named container. If omitted, the daemon watches all running containers (Multi mode).
+    #[arg(long, value_name = "CONTAINER_NAME")]
+    pub target_container: Option<String>,
 }
 
-fn validate_args(args: &Args) -> Result<(), String> {
-    let action: &Option<String> = match (&args.action, &args.action_base64) {
-        (None, None) => &None,
-        (None, Some(_)) => &args.action_base64,
-        (Some(_), None) => &args.action,
-        (Some(_), Some(_)) => {
-            return Err("--action and --action-base64 may not be used together".into());
-        }
-    };
-
-    // action might only occur with target-pid
-    match (
-        &args.major,
-        &args.minor,
-        &args.devname,
-        action,
-        &args.target_pid,
-    ) {
-        (None, None, None, Some(_), _) => {}
-        (_, _, _, None, None) => {}
-        _ => {
-            return Err("--action or --action-base64 must not be used in combination with any other argument other than target-pid".into());
+impl Args {
+    pub fn get_scope(&self) -> Scope {
+        match &self.target_container {
+            Some(name) => Scope::Single(name.clone()),
+            None => Scope::Multi,
         }
     }
 
-    // major/minor must appear together
-    match (&args.major, &args.minor) {
-        (Some(_), Some(_)) | (None, None) => {}
-        _ => {
-            return Err("--major and --minor must be specified together or not at all".into());
+    pub fn resolve_runtime(&self) -> ContainerRuntime {
+        if let Some(legacy_placement) = &self.placement {
+            return match legacy_placement {
+                Placement::InContainer => ContainerRuntime::GenericPlacementInContainer,
+                Placement::OnHost => ContainerRuntime::GenericPlacementOnHost,
+                Placement::None => ContainerRuntime::GenericSendNetlinkMessageOnly,
+            };
         }
+
+        self.container_runtime.clone()
     }
 
-    // devname length constraint
-    if let Some(devname) = &args.devname {
-        if devname.len() >= DEVNAME_MAX_LEN {
-            return Err(format!(
-                "--devname must be shorter than {} bytes",
-                DEVNAME_MAX_LEN
-            ));
+    fn validate_args(&self) -> Result<(), String> {
+        if self.placement.is_some() && self.container_runtime != ContainerRuntime::Auto {
+            return Err(
+                "Conflict: --placement and --container-runtime cannot be used together. \
+                Please use only --container-runtime (the --placement flag is deprecated)."
+                    .into(),
+            );
         }
-    }
 
-    Ok(())
+        let action: &Option<String> = match (&self.action, &self.action_base64) {
+            (None, None) => &None,
+            (None, Some(_)) => &self.action_base64,
+            (Some(_), None) => &self.action,
+            (Some(_), Some(_)) => {
+                return Err("--action and --action-base64 may not be used together".into());
+            }
+        };
+
+        // action might only occur with target-pid
+        match (
+            self.major,
+            self.minor,
+            &self.devname,
+            action,
+            &self.target_pid,
+        ) {
+            (None, None, None, Some(_), _) => {}
+            (_, _, _, None, None) => {}
+            _ => {
+                return Err("--action or --action-base64 must not be used in combination with any other argument other than target-pid".into());
+            }
+        }
+
+        // major/minor must appear together
+        match (self.major, self.minor) {
+            (Some(_), Some(_)) | (None, None) => {}
+            _ => {
+                return Err("--major and --minor must be specified together or not at all".into());
+            }
+        }
+
+        // devname length constraint
+        if let Some(devname) = &self.devname {
+            if devname.len() >= DEVNAME_MAX_LEN {
+                return Err(format!(
+                    "--devname must be shorter than {} bytes",
+                    DEVNAME_MAX_LEN
+                ));
+            }
+        }
+
+        Ok(())
+    }
 }
 
 fn main() -> std::io::Result<()> {
@@ -164,7 +207,7 @@ fn main() -> std::io::Result<()> {
         .next()
         .expect("Couldn't retrieve program name");
 
-    if let Err(e) = validate_args(&args) {
+    if let Err(e) = args.validate_args() {
         eprintln!("Error: {e}");
         std::process::exit(2);
     }
@@ -186,7 +229,8 @@ fn main() -> std::io::Result<()> {
 
     if action.is_some() {
         if let Some(target_pid) = args.target_pid {
-            process_tools::run_in_net_and_mnt_namespace(target_pid.as_str(),&args.device_owner).unwrap();
+            process_tools::run_in_net_and_mnt_namespace(target_pid.as_str(), &args.device_owner)
+                .unwrap();
         }
         let error_code = actions::handle_action::handle_cli_action(action.unwrap());
         std::process::exit(error_code);
@@ -200,9 +244,11 @@ fn main() -> std::io::Result<()> {
     check_permissions().expect("failed to read the capabilities of the vuinputd process");
     vt_tools::check_vt_status();
 
+    let container_runtime = args.resolve_runtime();
+
     global_config::initialize_global_config(
         &args.device_policy,
-        &args.placement,
+        &container_runtime,
         &args.devname,
         &args.device_owner,
     );
@@ -235,10 +281,8 @@ fn main() -> std::io::Result<()> {
         None => "vuinput",
         Some(devname) => devname,
     };
-    if args.placement == Placement::OnHost {
-        let path_prefix = format!("/run/vuinputd/{}", global_config::get_vudevname());
-        let _ = host_fs::ensure_host_fs_structure(&path_prefix);
-    }
+
+    container_runtime.initialize();
 
     let vuinput_devicename = CString::new(format!("DEVNAME={}", vuinput_devicename)).unwrap();
 

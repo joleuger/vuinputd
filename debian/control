@@ -27,6 +27,7 @@ Build-Depends: debhelper (>= 12),
  librust-clap-dev,
  librust-base64-dev,
  librust-smallvec-dev,
+ librust-async-trait-dev,
  pkg-config,  
  build-essential
 Standards-Version: 4.6.0

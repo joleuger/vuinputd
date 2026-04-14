@@ -15,7 +15,7 @@ use log::debug;
 
 use crate::{
     actions::action::Action,
-    global_config::{self, get_placement, Placement},
+    global_config::get_container_runtime,
     input_realizer::runtime_data,
     job_engine::job::{Job, JobTarget},
     jobs::monitor_udev_job::EVENT_STORE,
@@ -146,35 +146,17 @@ impl EmitUdevEventJob {
         let runtime_data = runtime_data.unwrap();
         let netlink_data = netlink_data.unwrap();
 
-        match get_placement() {
-            Placement::InContainer => {
-                let write_udev_runtime_data = Action::WriteUdevRuntimeData {
-                    runtime_data: Some(runtime_data),
-                    major: self.major,
-                    minor: self.minor,
-                };
+        let injector = get_container_runtime().injection_strategy();
 
-                let child_pid =
-                    process_tools::start_action(write_udev_runtime_data, &self.requesting_process)
-                        .expect("subprocess should work");
-
-                let _exit_info = await_process(Pid::Pid(child_pid)).await.unwrap();
-            }
-            Placement::OnHost => {
-                let path_prefix = format!("/run/vuinputd/{}", global_config::get_vudevname());
-                runtime_data::write_udev_data(
-                    &path_prefix,
-                    &runtime_data,
-                    self.major.into(),
-                    self.minor.into(),
-                )
-                .expect(&format!(
-                    "VUI-UDEV-002: could not write into {}",
-                    &path_prefix
-                )); //TODO: somewhat costly
-            }
-            Placement::None => {}
-        }
+        injector
+            .write_udev_runtime_data(
+                &self.requesting_process,
+                &runtime_data,
+                self.major,
+                self.minor,
+            )
+            .await
+            .unwrap();
 
         // this is always in the container
         let emit_netlink_message = Action::EmitNetlinkMessage {

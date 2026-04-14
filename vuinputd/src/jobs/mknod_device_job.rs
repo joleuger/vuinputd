@@ -10,7 +10,7 @@ use std::{
 
 use crate::{
     actions::action::Action,
-    global_config::{self, Placement},
+    global_config::{self, get_container_runtime, Placement},
     input_realizer::input_device,
     job_engine::job::{Job, JobTarget},
     process_tools::{self, await_process, Pid, RequestingProcess},
@@ -95,29 +95,17 @@ impl Job for MknodDeviceJob {
 
 impl MknodDeviceJob {
     async fn mknod_device(self) {
-        match global_config::get_placement() {
-            Placement::InContainer => {
-                let mknod_device_action = Action::MknodDevice {
-                    path: format!("/dev/input/{}", &self.devname),
-                    major: self.major,
-                    minor: self.minor,
-                };
+        let injector = get_container_runtime().injection_strategy();
 
-                let child_pid =
-                    process_tools::start_action(mknod_device_action, &self.requesting_process)
-                        .expect("subprocess should work");
-
-                let _exit_info = await_process(Pid::Pid(child_pid)).await.unwrap();
-            }
-            Placement::OnHost => {
-                let path_prefix = format!("/run/vuinputd/{}", global_config::get_vudevname());
-                let path = format!("{}/dev-input/{}", path_prefix, self.devname);
-                input_device::ensure_input_device(path.clone(), self.major, self.minor)
-                    .expect(&format!("VUI-DEV-001: could not create {}", &path));
-                //TODO: somewhat costly
-            }
-            Placement::None => {}
-        }
+        injector
+            .mknod_device_node(
+                &self.requesting_process,
+                &self.devname,
+                self.major,
+                self.minor,
+            )
+            .await
+            .unwrap();
 
         self.set_state(&State::Finished);
     }

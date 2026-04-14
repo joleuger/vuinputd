@@ -5,16 +5,28 @@
 use clap::ValueEnum;
 use std::sync::OnceLock;
 
+use crate::container_runtime::ContainerRuntime;
+
 #[derive(Debug)]
 pub struct GlobalConfig {
     pub policy: DevicePolicy,
-    pub placement: Placement,
+    pub container_runtime: ContainerRuntime,
     pub vudevname: String,
     pub device_owner: DeviceOwner,
 }
 
 // The actual static variable. It starts empty and is set once in main().
 pub static CONFIG: OnceLock<GlobalConfig> = OnceLock::new();
+
+/// Defines the operational scope of the vuinputd instance
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub enum Scope {
+    #[default]
+    /// Watch all running containers of the configured runtime and manage lifecycle.
+    Multi,
+    /// Bind to a single named container. The name is passed directly to the engine's CLI/API.
+    Single(String),
+}
 
 /// The device policy decides what events stay and what is filtered out.
 #[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum, Default)]
@@ -31,6 +43,8 @@ pub enum DevicePolicy {
     StrictGamepad,
 }
 /// Where to create runtime artifacts (device nodes + udev data)
+/// Deprecated, use --container-runtime instead. Currently just maps to
+/// --container-runtime
 #[derive(Debug, Clone, ValueEnum, Default, PartialEq, Eq)]
 pub enum Placement {
     #[default]
@@ -66,14 +80,14 @@ impl DeviceOwner {
 
 pub fn initialize_global_config(
     device_policy: &DevicePolicy,
-    placement: &Placement,
+    container_runtime: &ContainerRuntime,
     devname: &Option<String>,
     device_owner: &DeviceOwner,
 ) {
     if CONFIG
         .set(GlobalConfig {
             policy: device_policy.clone(),
-            placement: placement.clone(),
+            container_runtime: container_runtime.clone(),
             vudevname: devname.clone().unwrap_or("vuinput".to_string()),
             device_owner: device_owner.clone(),
         })
@@ -88,8 +102,8 @@ pub fn get_device_policy<'a>() -> &'a DevicePolicy {
     &CONFIG.get().unwrap().policy
 }
 
-pub fn get_placement<'a>() -> &'a Placement {
-    &CONFIG.get().unwrap().placement
+pub fn get_container_runtime<'a>() -> &'a ContainerRuntime {
+    &CONFIG.get().unwrap().container_runtime
 }
 
 pub fn get_vudevname<'a>() -> &'a String {

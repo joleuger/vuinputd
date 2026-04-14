@@ -12,7 +12,7 @@ use log::debug;
 
 use crate::{
     actions::action::Action,
-    global_config::{self, Placement},
+    global_config::{self, get_container_runtime, Placement},
     input_realizer::{input_device, runtime_data},
     job_engine::job::{Job, JobTarget},
     jobs::monitor_udev_job::EVENT_STORE,
@@ -125,49 +125,22 @@ impl RemoveDeviceJob {
 
         let _ = netlink_data.insert("ACTION".to_string(), "remove".to_string());
 
-        match global_config::get_placement() {
-            Placement::InContainer => {
-                let dev_path = format!("/dev/input/{}", &self.dev_name);
-                let remove_device_action = Action::RemoveDevice {
-                    path: dev_path,
-                    major: self.major,
-                    minor: self.minor,
-                };
+        let injector = get_container_runtime().injection_strategy();
 
-                let child_pid_1 =
-                    process_tools::start_action(remove_device_action, &self.requesting_process)
-                        .expect("subprocess should work");
+        injector
+            .remove_device_node(
+                &self.requesting_process,
+                &self.dev_name,
+                self.major,
+                self.minor,
+            )
+            .await
+            .unwrap();
 
-                let write_udev_runtime_data_action = Action::WriteUdevRuntimeData {
-                    runtime_data: None,
-                    major: self.major,
-                    minor: self.minor,
-                };
-
-                let child_pid_2 = process_tools::start_action(
-                    write_udev_runtime_data_action,
-                    &self.requesting_process,
-                )
-                .expect("subprocess should work");
-
-                let _exit_info = await_process(Pid::Pid(child_pid_1)).await;
-                let _exit_info = await_process(Pid::Pid(child_pid_2)).await;
-            }
-            Placement::OnHost => {
-                let path_prefix = format!("/run/vuinputd/{}", global_config::get_vudevname());
-                let devnode = format!("{}/dev-input/{}", path_prefix, self.dev_name);
-                input_device::remove_input_device(devnode.clone(), self.major, self.minor).expect(
-                    &format!("VUI-DEV-003: could not remove device node {}", &devnode),
-                );
-                runtime_data::delete_udev_data(&path_prefix, self.major, self.minor).expect(
-                    &format!(
-                        "VUI-UDEV-003: could not remove udev data from {}",
-                        &path_prefix
-                    ),
-                );
-            }
-            Placement::None => {}
-        }
+        injector
+            .remove_udev_runtime_data(&self.requesting_process, self.major, self.minor)
+            .await
+            .unwrap();
 
         // this is always in the container
         let emit_netlink_message = Action::EmitNetlinkMessage {
