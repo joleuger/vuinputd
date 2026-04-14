@@ -13,6 +13,7 @@ use crate::{
 pub static PLACEMENT_IN_CONTAINER: GenericPlacementInContainer = GenericPlacementInContainer {};
 pub static PLACEMENT_ON_HOST: GenericPlacementOnHost = GenericPlacementOnHost {};
 pub static SEND_NETLINK_ONLY: GenericSendNetlinkMessageOnly = GenericSendNetlinkMessageOnly {};
+pub static INCUS: Incus = Incus {};
 
 #[async_trait]
 pub trait InjectionStrategy {
@@ -60,6 +61,7 @@ pub trait InjectionStrategy {
 pub struct GenericPlacementInContainer {}
 pub struct GenericPlacementOnHost {}
 pub struct GenericSendNetlinkMessageOnly {}
+pub struct Incus {}
 
 #[async_trait]
 impl InjectionStrategy for GenericPlacementInContainer {
@@ -251,5 +253,71 @@ impl InjectionStrategy for GenericSendNetlinkMessageOnly {
         _minor: u64,
     ) -> anyhow::Result<()> {
         Ok(())
+    }
+}
+
+#[async_trait]
+impl InjectionStrategy for Incus {
+    async fn mknod_device_node(
+        &self,
+        _requesting_process: &RequestingProcess,
+        devname: &str,
+        _major: u64,
+        _minor: u64,
+    ) -> anyhow::Result<()> {
+        let hostpath = format!("path=/dev/input/{}", devname);
+        let incuspath = format!("path=/dev/input/{}", devname);
+        let child = std::process::Command::new("/proc/self/exe")
+            .args([
+                "incus",
+                "config",
+                "device",
+                "add",
+                "first",
+                devname,
+                "unix-char",
+                &incuspath,
+                &hostpath,
+                "mode=\"666\"",
+            ])
+            .spawn()?;
+        let output = child.wait_with_output()?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        println!("incus\n {}\n{}\n", stdout, stderr);
+        Ok(())
+    }
+
+    async fn remove_device_node(
+        &self,
+        _requesting_process: &RequestingProcess,
+        _devname: &str,
+        _major: u64,
+        _minor: u64,
+    ) -> anyhow::Result<()> {
+        Ok(())
+    }
+
+    async fn write_udev_runtime_data(
+        &self,
+        requesting_process: &RequestingProcess,
+        runtime_data: &str,
+        major: u64,
+        minor: u64,
+    ) -> anyhow::Result<()> {
+        PLACEMENT_IN_CONTAINER
+            .write_udev_runtime_data(requesting_process, runtime_data, major, minor)
+            .await
+    }
+
+    async fn remove_udev_runtime_data(
+        &self,
+        requesting_process: &RequestingProcess,
+        major: u64,
+        minor: u64,
+    ) -> anyhow::Result<()> {
+        PLACEMENT_IN_CONTAINER
+            .remove_udev_runtime_data(requesting_process, major, minor)
+            .await
     }
 }

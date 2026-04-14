@@ -4,8 +4,7 @@
 
 use crate::{
     container_runtime::injection_strategy::{
-        GenericPlacementInContainer, GenericPlacementOnHost, GenericSendNetlinkMessageOnly,
-        InjectionStrategy, PLACEMENT_IN_CONTAINER, PLACEMENT_ON_HOST, SEND_NETLINK_ONLY,
+        GenericPlacementInContainer, GenericPlacementOnHost, GenericSendNetlinkMessageOnly, INCUS, InjectionStrategy, PLACEMENT_IN_CONTAINER, PLACEMENT_ON_HOST, SEND_NETLINK_ONLY
     },
     global_config::get_vudevname,
 };
@@ -67,7 +66,7 @@ impl ContainerRuntime {
             ContainerRuntime::GenericPlacementInContainer => &PLACEMENT_IN_CONTAINER,
             ContainerRuntime::GenericPlacementOnHost => &PLACEMENT_ON_HOST,
             ContainerRuntime::GenericSendNetlinkMessageOnly => &SEND_NETLINK_ONLY,
-            ContainerRuntime::Incus => todo!("not implemented yet"),
+            ContainerRuntime::Incus => &INCUS,
             ContainerRuntime::Docker => &PLACEMENT_IN_CONTAINER,
             ContainerRuntime::Podman => &PLACEMENT_IN_CONTAINER,
             ContainerRuntime::Nspawn => &PLACEMENT_IN_CONTAINER,
