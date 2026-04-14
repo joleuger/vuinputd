@@ -23,11 +23,15 @@ pub unsafe extern "C" fn vuinput_read(
         "vuinput_read: offset needs to be 0 but is {}",
         _off
     );
+    fuse_lowlevel::fuse_reply_err(_req, EIO);
+    return;
 
     let fh = &(*_fi).fh;
     let vuinput_state_mutex =
         get_vuinput_state(&VuFileHandle::from_fuse_file_info(_fi.as_ref().unwrap())).unwrap();
+    println!("vuinput_read: lock");
     let mut vuinput_state = vuinput_state_mutex.lock().unwrap();
+    println!("vuinput_read: locked");
 
     const NORMAL_SIZE: usize = std::mem::size_of::<libc::input_event>();
     let is_compat = vuinput_state.requesting_process.is_compat;
@@ -37,7 +41,10 @@ pub unsafe extern "C" fn vuinput_read(
 
     vuinput_state.poll.pollphase = PollPhase::Reading;
     // read up to 24 bytes
+    println!("vuinput_read: read");
     let result = vuinput_state.file.read(&mut buffer);
+
+    println!("vuinput_read: read finished");
     match result {
         Ok(NORMAL_SIZE) => {
             if !is_compat {

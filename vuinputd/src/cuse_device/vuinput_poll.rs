@@ -21,6 +21,9 @@ pub unsafe extern "C" fn vuinput_poll(
     fi: *mut fuse_lowlevel::fuse_file_info,
     ph: *mut fuse_lowlevel::fuse_pollhandle,
 ) {
+    fuse_lowlevel::fuse_reply_err(req, EIO);
+    return;
+
     let vuinput_state_mutex =
         get_vuinput_state(&VuFileHandle::from_fuse_file_info(fi.as_ref().unwrap())).unwrap();
     let mut vuinput_state = vuinput_state_mutex.lock().unwrap();
