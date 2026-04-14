@@ -245,12 +245,14 @@ fn main() -> std::io::Result<()> {
     vt_tools::check_vt_status();
 
     let container_runtime = args.resolve_runtime();
+    let scope= args.get_scope();
 
     global_config::initialize_global_config(
         &args.device_policy,
         &container_runtime,
         &args.devname,
         &args.device_owner,
+        &scope,
     );
     initialize_evdev_write_watcher().expect(
         "failed to initialize the watcher that watches for writes on the created evdev devices",

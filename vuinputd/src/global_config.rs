@@ -13,6 +13,7 @@ pub struct GlobalConfig {
     pub container_runtime: ContainerRuntime,
     pub vudevname: String,
     pub device_owner: DeviceOwner,
+    pub scope: Scope,
 }
 
 // The actual static variable. It starts empty and is set once in main().
@@ -83,6 +84,7 @@ pub fn initialize_global_config(
     container_runtime: &ContainerRuntime,
     devname: &Option<String>,
     device_owner: &DeviceOwner,
+    scope: &Scope,
 ) {
     if CONFIG
         .set(GlobalConfig {
@@ -90,6 +92,7 @@ pub fn initialize_global_config(
             container_runtime: container_runtime.clone(),
             vudevname: devname.clone().unwrap_or("vuinput".to_string()),
             device_owner: device_owner.clone(),
+            scope: scope.clone(),
         })
         .is_err()
     {
@@ -112,4 +115,8 @@ pub fn get_vudevname<'a>() -> &'a String {
 
 pub fn get_device_owner<'a>() -> &'a DeviceOwner {
     &CONFIG.get().unwrap().device_owner
+}
+
+pub fn get_scope<'a>() -> &'a Scope {
+    &CONFIG.get().unwrap().scope
 }

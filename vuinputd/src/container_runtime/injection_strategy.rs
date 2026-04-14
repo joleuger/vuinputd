@@ -2,11 +2,12 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
+use anyhow::bail;
 use async_trait::async_trait;
 
 use crate::{
     actions::action::Action,
-    global_config,
+    global_config::{self, get_scope},
     input_realizer::{input_device, runtime_data},
     process_tools::{self, Pid, RequestingProcess},
 };
@@ -267,13 +268,17 @@ impl InjectionStrategy for Incus {
     ) -> anyhow::Result<()> {
         let hostpath = format!("path=/dev/input/{}", devname);
         let incuspath = format!("path=/dev/input/{}", devname);
-        let child = std::process::Command::new("/proc/self/exe")
+        let container_name = get_scope();
+        let container_name = match container_name {
+            global_config::Scope::Multi => bail!("no container name given"),
+            global_config::Scope::Single(container_name) => container_name,
+        };
+        let child = std::process::Command::new("/usr/bin/incus")
             .args([
-                "incus",
                 "config",
                 "device",
                 "add",
-                "first",
+                container_name,
                 devname,
                 "unix-char",
                 &incuspath,
