@@ -11,7 +11,6 @@ use ::cuse_lowlevel::*;
 use smallvec::SmallVec;
 
 use crate::process_tools::RequestingProcess;
-use smallvec::smallvec;
 
 pub type PendingPollHandles = SmallVec<[*mut fuse_lowlevel::fuse_pollhandle; 1]>;
 
@@ -61,6 +60,43 @@ impl Default for PollPhase {
     }
 }
 
+#[derive(Debug)]
+pub struct PollHandle {
+    ptr: NonNull<fuse_lowlevel::fuse_pollhandle>,
+    has_been_completed: bool,
+}
+
+impl PollHandle {
+    pub fn new(ptr: NonNull<fuse_lowlevel::fuse_pollhandle>) -> Self {
+        Self {
+            ptr: ptr,
+            has_been_completed: false,
+        }
+    }
+    pub fn notify(&mut self) {
+        if !self.has_been_completed {
+            unsafe {
+                fuse_lowlevel::fuse_lowlevel_notify_poll(self.ptr.as_ptr());
+                fuse_lowlevel::fuse_pollhandle_destroy(self.ptr.as_ptr());
+            }
+            self.has_been_completed = true;
+        }
+    }
+}
+
+impl Drop for PollHandle {
+    fn drop(&mut self) {
+        if !self.has_been_completed {
+            unsafe {
+                fuse_lowlevel::fuse_pollhandle_destroy(self.ptr.as_ptr());
+            }
+            self.has_been_completed = true;
+        }
+    }
+}
+
+unsafe impl Send for PollHandle {}
+
 /// this data structure ensures poll and read are synchronized.
 /// poll() and read() must synchronize through one shared readines
 /// state, and the state transitions must be done under the same per-handle mutex.
@@ -78,30 +114,28 @@ pub struct PollState {
     /// Pending FUSE poll waiters for this device.
     /// Optimized for the common case of 0 or 1 waiter, but supports
     /// multiple concurrent poll() callers correctly.
-    pub pending: SmallVec<[NonNull<fuse_lowlevel::fuse_pollhandle>; 1]>,
+    pending: Option<PollHandle>,
 }
 
 impl PollState {
     pub fn new() -> PollState {
         PollState {
             pollphase: PollPhase::Empty,
-            pending: smallvec![],
+            pending: None,
         }
     }
     pub fn has_waiters(&self) -> bool {
-        !self.pending.is_empty()
+        !self.pending.is_some()
     }
 
-    pub fn add_waiter(&mut self, handle: NonNull<fuse_lowlevel::fuse_pollhandle>) {
-        self.pending.push(handle);
+    pub fn set_waiter(&mut self, handle: NonNull<fuse_lowlevel::fuse_pollhandle>) {
+        self.pending = Some(PollHandle::new(handle));
     }
 
-    pub fn take_waiters(&mut self) -> SmallVec<[NonNull<fuse_lowlevel::fuse_pollhandle>; 1]> {
+    pub fn take_waiters(&mut self) -> Option<PollHandle> {
         std::mem::take(&mut self.pending)
     }
 }
-
-unsafe impl Send for PollState {}
 
 #[derive(Debug)]
 pub struct VuInputState {

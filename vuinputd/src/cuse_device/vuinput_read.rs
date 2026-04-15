@@ -23,8 +23,8 @@ pub unsafe extern "C" fn vuinput_read(
         "vuinput_read: offset needs to be 0 but is {}",
         _off
     );
-    fuse_lowlevel::fuse_reply_err(_req, EIO);
-    return;
+    //fuse_lowlevel::fuse_reply_err(_req, EIO);
+    //return;
 
     let fh = &(*_fi).fh;
     let vuinput_state_mutex =
@@ -41,10 +41,10 @@ pub unsafe extern "C" fn vuinput_read(
 
     vuinput_state.poll.pollphase = PollPhase::Reading;
     // read up to 24 bytes
-    println!("vuinput_read: read");
+    //println!("vuinput_read: read");
     let result = vuinput_state.file.read(&mut buffer);
 
-    println!("vuinput_read: read finished");
+    //println!("vuinput_read: read finished");
     match result {
         Ok(NORMAL_SIZE) => {
             if !is_compat {

@@ -106,15 +106,11 @@ fn evdev_write_watch_loop(shutdown: Arc<AtomicBool>, epoll: Arc<Epoll>) {
             let state = super::state::get_vuinput_state(&fh);
             if let Ok(state) = state {
                 let mut state = state.lock().unwrap();
-
-                for handle in state.poll.take_waiters() {
-                    unsafe {
-                        fuse_lowlevel::fuse_lowlevel_notify_poll(handle.as_ptr());
-                        fuse_lowlevel::fuse_pollhandle_destroy(handle.as_ptr());
-                    }
+                let handle = state.poll.take_waiters();
+                if let Some(mut handle)= handle {
+                    handle.notify();
                 }
                 state.poll.pollphase = PollPhase::Readable;
-                state.poll.pending.clear();
             }
         }
     }
