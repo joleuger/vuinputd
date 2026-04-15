@@ -1,3 +1,5 @@
+
+[![Ask DeepWiki](https://deepwiki.com/badge.svg)](https://deepwiki.com/joleuger/vuinputd)
 # vuinputd
 
 **Run Sunshine and other uinput-based apps inside containers — with full input isolation and zero kernel patches.**
