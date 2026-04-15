@@ -283,7 +283,7 @@ impl InjectionStrategy for Incus {
                 "unix-char",
                 &incuspath,
                 &hostpath,
-                "mode=\"666\"",
+                "mode=666",
             ])
             .spawn()?;
         let output = child.wait_with_output()?;
