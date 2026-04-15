@@ -29,9 +29,7 @@ pub unsafe extern "C" fn vuinput_read(
     let fh = &(*_fi).fh;
     let vuinput_state_mutex =
         get_vuinput_state(&VuFileHandle::from_fuse_file_info(_fi.as_ref().unwrap())).unwrap();
-    println!("vuinput_read: lock");
     let mut vuinput_state = vuinput_state_mutex.lock().unwrap();
-    println!("vuinput_read: locked");
 
     const NORMAL_SIZE: usize = std::mem::size_of::<libc::input_event>();
     let is_compat = vuinput_state.requesting_process.is_compat;
