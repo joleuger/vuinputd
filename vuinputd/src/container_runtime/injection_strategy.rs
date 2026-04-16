@@ -296,10 +296,28 @@ impl InjectionStrategy for Incus {
     async fn remove_device_node(
         &self,
         _requesting_process: &RequestingProcess,
-        _devname: &str,
+        devname: &str,
         _major: u64,
         _minor: u64,
     ) -> anyhow::Result<()> {
+        let container_name = get_scope();
+        let container_name = match container_name {
+            global_config::Scope::Multi => bail!("no container name given"),
+            global_config::Scope::Single(container_name) => container_name,
+        };
+        let child = std::process::Command::new("/usr/bin/incus")
+            .args([
+                "config",
+                "device",
+                "remove",
+                container_name,
+                devname,
+            ])
+            .spawn()?;
+        let output = child.wait_with_output()?;
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        println!("incus\n {}\n{}\n", stdout, stderr);
         Ok(())
     }
 
