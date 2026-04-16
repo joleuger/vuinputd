@@ -83,8 +83,9 @@ impl InjectionStrategy for GenericPlacementInContainer {
             minor: minor,
         };
 
-        let child_pid = process_tools::start_action(mknod_device_action, &requesting_process)
-            .expect("subprocess should work");
+        let child_pid =
+            process_tools::start_action(mknod_device_action, &requesting_process, false)
+                .expect("subprocess should work");
 
         let _exit_info = process_tools::await_process(Pid::Pid(child_pid))
             .await
@@ -106,8 +107,9 @@ impl InjectionStrategy for GenericPlacementInContainer {
             minor: minor,
         };
 
-        let child_pid_1 = process_tools::start_action(remove_device_action, &requesting_process)
-            .expect("subprocess should work");
+        let child_pid_1 =
+            process_tools::start_action(remove_device_action, &requesting_process, false)
+                .expect("subprocess should work");
 
         let _exit_info = process_tools::await_process(Pid::Pid(child_pid_1)).await;
         Ok(())
@@ -126,8 +128,9 @@ impl InjectionStrategy for GenericPlacementInContainer {
             minor: minor,
         };
 
-        let child_pid = process_tools::start_action(write_udev_runtime_data, &requesting_process)
-            .expect("subprocess should work");
+        let child_pid =
+            process_tools::start_action(write_udev_runtime_data, &requesting_process, false)
+                .expect("subprocess should work");
 
         let _exit_info = process_tools::await_process(Pid::Pid(child_pid))
             .await
@@ -148,7 +151,7 @@ impl InjectionStrategy for GenericPlacementInContainer {
         };
 
         let child_pid_2 =
-            process_tools::start_action(write_udev_runtime_data_action, &requesting_process)
+            process_tools::start_action(write_udev_runtime_data_action, &requesting_process, false)
                 .expect("subprocess should work");
         let _exit_info = process_tools::await_process(Pid::Pid(child_pid_2)).await;
         Ok(())
@@ -164,8 +167,9 @@ impl InjectionStrategy for GenericPlacementInContainer {
             netlink_message: netlink_message,
         };
 
-        let child_pid = process_tools::start_action(emit_netlink_message, requesting_process)
-            .expect("subprocess should work");
+        let child_pid =
+            process_tools::start_action(emit_netlink_message, requesting_process, false)
+                .expect("subprocess should work");
 
         let _exit_info = process_tools::await_process(Pid::Pid(child_pid)).await;
         Ok(())
@@ -234,7 +238,6 @@ impl InjectionStrategy for GenericPlacementOnHost {
         ));
         Ok(())
     }
-
 
     /// Emit netlink message.
     async fn emit_netlink_message(
@@ -383,13 +386,20 @@ impl InjectionStrategy for Incus {
     }
 
     /// Emit netlink message.
+    /// Emit netlink message.
     async fn emit_netlink_message(
         &self,
         requesting_process: &RequestingProcess,
         netlink_message: HashMap<String, String>,
     ) -> anyhow::Result<()> {
-        PLACEMENT_IN_CONTAINER
-            .emit_netlink_message(requesting_process, netlink_message)
-            .await
+        let emit_netlink_message = Action::EmitNetlinkMessage {
+            netlink_message: netlink_message,
+        };
+
+        let child_pid = process_tools::start_action(emit_netlink_message, requesting_process, true)
+            .expect("subprocess should work");
+
+        let _exit_info = process_tools::await_process(Pid::Pid(child_pid)).await;
+        Ok(())
     }
 }

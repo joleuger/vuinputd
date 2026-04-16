@@ -82,13 +82,21 @@ struct Args {
     #[arg(long = "action-base64", value_name = "BASE64")]
     pub action_base64: Option<String>,
 
-    /// Process id that is used as the namespace source (e.g. 1234 is used to read the namespaces from /proc/1234/ns).
+    /// Process id that is used as the namespace source (e.g. 1234 is used to read the namespaces from /proc/1234/ns). Enters net and
+    /// mnt namespaces by default.
     #[arg(
         long = "target-pid",
         value_name = "PID",
-        help = "Process id that is used as the namespace source (e.g. 1234 is used to read the namespaces from /proc/1234/ns)."
+        help = "Process id that is used as the namespace source (e.g. 1234 is used to read the namespaces from /proc/1234/ns). Enters net and mnt namespaces by default."
     )]
     pub target_pid: Option<String>,
+
+    /// Enter also the user namespace. Used together with --target-pid.
+    #[arg(
+        long = "enter-user-namespace",
+        help = "Enter also the user namespace. Used together with --target-pid."
+    )]
+    pub enter_user_namespace: bool,
 
     #[arg(
         long = "vt-guard",
@@ -229,8 +237,12 @@ fn main() -> std::io::Result<()> {
 
     if action.is_some() {
         if let Some(target_pid) = args.target_pid {
-            process_tools::run_in_net_and_mnt_namespace(target_pid.as_str(), &args.device_owner)
-                .unwrap();
+            process_tools::run_in_net_and_mnt_namespace(
+                target_pid.as_str(),
+                &args.device_owner,
+                args.enter_user_namespace,
+            )
+            .unwrap();
         }
         let error_code = actions::handle_action::handle_cli_action(action.unwrap());
         std::process::exit(error_code);
@@ -245,7 +257,7 @@ fn main() -> std::io::Result<()> {
     vt_tools::check_vt_status();
 
     let container_runtime = args.resolve_runtime();
-    let scope= args.get_scope();
+    let scope = args.get_scope();
 
     global_config::initialize_global_config(
         &args.device_policy,

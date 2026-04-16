@@ -158,7 +158,10 @@ impl EmitUdevEventJob {
             .await
             .unwrap();
 
-        injector.emit_netlink_message(&self.requesting_process, netlink_data).await.unwrap();
+        injector
+            .emit_netlink_message(&self.requesting_process, netlink_data)
+            .await
+            .unwrap();
 
         self.set_state(&State::Finished);
     }

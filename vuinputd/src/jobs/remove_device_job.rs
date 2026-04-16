@@ -142,16 +142,10 @@ impl RemoveDeviceJob {
             .await
             .unwrap();
 
-        // this is always in the container
-        let emit_netlink_message = Action::EmitNetlinkMessage {
-            netlink_message: netlink_data.clone(),
-        };
-
-        let child_pid_netlink =
-            process_tools::start_action(emit_netlink_message, &self.requesting_process)
-                .expect("subprocess should work");
-
-        let _exit_info = await_process(Pid::Pid(child_pid_netlink)).await;
+        injector
+            .emit_netlink_message(&self.requesting_process, netlink_data)
+            .await
+            .unwrap();
 
         self.set_state(&State::Finished);
     }

@@ -282,46 +282,57 @@ fn print_debug_string(action: &str, ns: &RequestingProcess) {
 
 /// Runs a function inside the given network and mount namespaces.
 /// Returns the child PID so the caller can `waitpid` on it.
-pub fn start_action(action: Action, ns: &RequestingProcess) -> anyhow::Result<u32> {
+pub fn start_action(
+    action: Action,
+    ns: &RequestingProcess,
+    enter_user_ns: bool,
+) -> anyhow::Result<u32> {
     let action_json = serde_json::to_string(&action).unwrap();
     print_debug_string(&action_json, &ns);
 
     let device_owner = get_device_owner().to_string_rep();
 
     let child = unsafe {
-        Command::new("/proc/self/exe")
-            .args([
-                "--action",
-                action_json.as_str(),
-                "--target-pid",
-                ns.pid_requestor_root.to_string_rep().as_str(),
-                "--device-owner",
-                device_owner.as_str(),
-            ])
-            .pre_exec(|| {
-                // Last resort, if the parent just is killed.
-                libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL);
-                Ok(())
-            })
-            .spawn()
-            .expect("failed to start vuinputd")
+        let mut cmd = Command::new("/proc/self/exe");
+        cmd.args([
+            "--action",
+            action_json.as_str(),
+            "--target-pid",
+            ns.pid_requestor_root.to_string_rep().as_str(),
+            "--device-owner",
+            device_owner.as_str(),
+        ]);
+        if enter_user_ns {
+            cmd.arg("--enter-user-namespace");
+        }
+        cmd.pre_exec(|| {
+            // Last resort, if the parent just is killed.
+            libc::prctl(libc::PR_SET_PDEATHSIG, libc::SIGKILL);
+            Ok(())
+        })
+        .spawn()
+        .expect("failed to start vuinputd")
     };
 
     Result::Ok(child.id())
 }
 
-pub fn run_in_net_and_mnt_namespace(target_pid: &str, device_owner: &DeviceOwner) -> anyhow::Result<()> {
+pub fn run_in_net_and_mnt_namespace(
+    target_pid: &str,
+    device_owner: &DeviceOwner,
+    enter_user_ns: bool,
+) -> anyhow::Result<()> {
     debug!(
         "Entering namespaces of process {}. We assume this is the root process of the container.",
         target_pid
     );
 
     let fs_uid_gid = if *device_owner == DeviceOwner::ContainerDevFolder {
-        let pid:u32 = target_pid.trim().parse()?;
+        let pid: u32 = target_pid.trim().parse()?;
         let pid = Pid::Pid(pid);
-        let fs_uid=ns_fscreds::get_uid_in_container(pid, 0)?;
-        let fs_gid=ns_fscreds::get_gid_in_container(pid, 0)?;
-        Some((fs_uid,fs_gid))
+        let fs_uid = ns_fscreds::get_uid_in_container(pid, 0)?;
+        let fs_gid = ns_fscreds::get_gid_in_container(pid, 0)?;
+        Some((fs_uid, fs_gid))
     } else {
         None
     };
@@ -331,16 +342,22 @@ pub fn run_in_net_and_mnt_namespace(target_pid: &str, device_owner: &DeviceOwner
     if !fs::exists(path).unwrap() {
         return Err(anyhow!("the root process of the container whose namespaces we want to enter does not exist anymore"));
     }
+    let user = File::open(nspath.to_string() + "/user")?;
     let net = File::open(nspath.to_string() + "/net")?;
     let mnt = File::open(nspath.to_string() + "/mnt")?;
 
     unsafe {
         // enter namespaces
+        if enter_user_ns {
+            libc::setns(user.as_raw_fd(), libc::CLONE_NEWUSER);
+            libc::setresgid(0, 0, 0);
+            libc::setresuid(0, 0, 0);
+        }
         libc::setns(net.as_raw_fd(), libc::CLONE_NEWNET);
         libc::setns(mnt.as_raw_fd(), libc::CLONE_NEWNS);
     };
 
-    if let Some((fs_uid,fs_gid)) = fs_uid_gid {
+    if let Some((fs_uid, fs_gid)) = fs_uid_gid {
         ns_fscreds::acquire_uid_and_gid(fs_uid, fs_gid)?;
     }
 
