@@ -2,6 +2,8 @@
 //
 // Author: Johannes Leupolz <dev@leupolz.eu>
 
+use std::collections::HashMap;
+
 use anyhow::bail;
 use async_trait::async_trait;
 
@@ -45,17 +47,19 @@ pub trait InjectionStrategy {
         minor: u64,
     ) -> anyhow::Result<()>;
 
-    /// Emit netlink message.
-    /// emit_netlink_message is the same for all container engines, we add
-    /// a method to enable more flexibility in the future and also allow tests.
-    // async fn emit_netlink_message(&self, netlink_message: HashMap<String, String>,) -> anyhow::Result<()>;
-
     /// Remove runtime data.
     async fn remove_udev_runtime_data(
         &self,
         requesting_process: &RequestingProcess,
         major: u64,
         minor: u64,
+    ) -> anyhow::Result<()>;
+
+    /// Emit netlink message.
+    async fn emit_netlink_message(
+        &self,
+        requesting_process: &RequestingProcess,
+        netlink_message: HashMap<String, String>,
     ) -> anyhow::Result<()>;
 }
 
@@ -149,6 +153,23 @@ impl InjectionStrategy for GenericPlacementInContainer {
         let _exit_info = process_tools::await_process(Pid::Pid(child_pid_2)).await;
         Ok(())
     }
+
+    /// Emit netlink message.
+    async fn emit_netlink_message(
+        &self,
+        requesting_process: &RequestingProcess,
+        netlink_message: HashMap<String, String>,
+    ) -> anyhow::Result<()> {
+        let emit_netlink_message = Action::EmitNetlinkMessage {
+            netlink_message: netlink_message,
+        };
+
+        let child_pid = process_tools::start_action(emit_netlink_message, requesting_process)
+            .expect("subprocess should work");
+
+        let _exit_info = process_tools::await_process(Pid::Pid(child_pid)).await;
+        Ok(())
+    }
 }
 
 #[async_trait]
@@ -213,6 +234,18 @@ impl InjectionStrategy for GenericPlacementOnHost {
         ));
         Ok(())
     }
+
+
+    /// Emit netlink message.
+    async fn emit_netlink_message(
+        &self,
+        requesting_process: &RequestingProcess,
+        netlink_message: HashMap<String, String>,
+    ) -> anyhow::Result<()> {
+        PLACEMENT_IN_CONTAINER
+            .emit_netlink_message(requesting_process, netlink_message)
+            .await
+    }
 }
 
 #[async_trait]
@@ -254,6 +287,17 @@ impl InjectionStrategy for GenericSendNetlinkMessageOnly {
         _minor: u64,
     ) -> anyhow::Result<()> {
         Ok(())
+    }
+
+    /// Emit netlink message.
+    async fn emit_netlink_message(
+        &self,
+        requesting_process: &RequestingProcess,
+        netlink_message: HashMap<String, String>,
+    ) -> anyhow::Result<()> {
+        PLACEMENT_IN_CONTAINER
+            .emit_netlink_message(requesting_process, netlink_message)
+            .await
     }
 }
 
@@ -306,13 +350,7 @@ impl InjectionStrategy for Incus {
             global_config::Scope::Single(container_name) => container_name,
         };
         let child = std::process::Command::new("/usr/bin/incus")
-            .args([
-                "config",
-                "device",
-                "remove",
-                container_name,
-                devname,
-            ])
+            .args(["config", "device", "remove", container_name, devname])
             .spawn()?;
         let output = child.wait_with_output()?;
         let stdout = String::from_utf8_lossy(&output.stdout);
@@ -341,6 +379,17 @@ impl InjectionStrategy for Incus {
     ) -> anyhow::Result<()> {
         PLACEMENT_IN_CONTAINER
             .remove_udev_runtime_data(requesting_process, major, minor)
+            .await
+    }
+
+    /// Emit netlink message.
+    async fn emit_netlink_message(
+        &self,
+        requesting_process: &RequestingProcess,
+        netlink_message: HashMap<String, String>,
+    ) -> anyhow::Result<()> {
+        PLACEMENT_IN_CONTAINER
+            .emit_netlink_message(requesting_process, netlink_message)
             .await
     }
 }
