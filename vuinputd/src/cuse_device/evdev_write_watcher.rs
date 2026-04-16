@@ -62,7 +62,7 @@ impl EvdevWriteWatcher {
 
         self.epoll.add(
             &vuinput_state.file,
-            EpollEvent::new(EpollFlags::EPOLLIN, fh),
+            EpollEvent::new(EpollFlags::EPOLLIN | EpollFlags::EPOLLET, fh),
         )
     }
 
@@ -107,7 +107,7 @@ fn evdev_write_watch_loop(shutdown: Arc<AtomicBool>, epoll: Arc<Epoll>) {
             if let Ok(state) = state {
                 let mut state = state.lock().unwrap();
                 let handle = state.poll.take_waiters();
-                if let Some(mut handle)= handle {
+                if let Some(mut handle) = handle {
                     handle.notify();
                 }
                 state.poll.pollphase = PollPhase::Readable;
