@@ -137,6 +137,16 @@ impl PollState {
     }
 }
 
+impl Drop for PollState {
+    fn drop(&mut self) {
+        //when the device closes, notify all pending waiters
+        let old_handle = self.take_waiters();
+        if let Some(mut old_handle) = old_handle {
+            old_handle.notify();
+        }
+    }
+}
+
 #[derive(Debug)]
 pub struct VuInputState {
     pub file: File,
